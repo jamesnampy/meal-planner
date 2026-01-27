@@ -157,14 +157,6 @@ const DEFAULT_RECIPES = [
 ];
 
 export async function GET(request: NextRequest) {
-  // Verify secret for security
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
-
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     return NextResponse.json({ error: 'MONGODB_URI not set' }, { status: 500 });
@@ -181,11 +173,20 @@ export async function GET(request: NextRequest) {
     // Check if already initialized
     const existing = await collection.findOne({ _key: 'recipes' });
     if (existing) {
+      // If already initialized, require auth for any subsequent calls
+      const authHeader = request.headers.get('authorization');
+      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        if (process.env.NODE_ENV === 'production') {
+          return NextResponse.json({ error: 'Already initialized' }, { status: 200 });
+        }
+      }
       return NextResponse.json({
         message: 'Already initialized',
         recipesCount: (existing.value as unknown[]).length
       });
     }
+
+    // First-time initialization allowed without auth
 
     // Initialize with defaults
     await collection.insertMany([
