@@ -1,5 +1,63 @@
 # Meal Planner
 
+## Quick Start
+
+### Prerequisites
+- Node.js 18+ installed
+- Anthropic API key (for AI recipe search)
+
+### Installation
+```bash
+cd meal-planner
+npm install
+```
+
+### Environment Setup
+Create a `.env.local` file with:
+```
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+CRON_SECRET=your-random-secret-here
+```
+
+### Running Locally
+```bash
+npm run dev
+```
+Open http://localhost:3000
+
+### Deployment to Vercel
+1. Push to GitHub
+2. Import to Vercel
+3. Add environment variables in Vercel dashboard:
+   - `ANTHROPIC_API_KEY`: Your Anthropic API key
+   - `CRON_SECRET`: Random string for cron job authentication
+4. Deploy
+
+The weekly cron job runs every Wednesday at 9 AM UTC.
+
+---
+
+## Claude AI Integration
+
+This app uses Claude AI for:
+
+### 1. Recipe Search (`/api/recipes/search`)
+- Users can search for recipes by cuisine, ingredient, or description
+- Claude searches and returns 3 recipe suggestions with full details
+- Each suggestion includes ingredients (with categories) and step-by-step instructions
+
+### 2. Meal Regeneration (`/api/plan/regenerate`)
+- When reviewing the weekly plan, users can ask Claude to suggest a different meal
+- Claude generates a new recipe that doesn't duplicate other meals in the plan
+- The new recipe is automatically added to the recipe library
+
+### API Key
+Get your API key from: https://console.anthropic.com/
+
+The app uses `claude-sonnet-4-20250514` for recipe generation.
+
+---
+
 # Meal Planner Specification
 
 ## Overview
