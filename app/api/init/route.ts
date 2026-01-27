@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { MongoClient } from 'mongodb';
 
-// Default recipes to initialize KV storage
+// Default recipes to initialize MongoDB
 const DEFAULT_RECIPES = [
   {
     id: "1",
@@ -165,20 +165,34 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    return NextResponse.json({ error: 'MONGODB_URI not set' }, { status: 500 });
+  }
+
+  let client: MongoClient | null = null;
+
   try {
+    client = new MongoClient(uri);
+    await client.connect();
+    const db = client.db('meal-planner');
+    const collection = db.collection('data');
+
     // Check if already initialized
-    const existing = await kv.get('recipes');
+    const existing = await collection.findOne({ _key: 'recipes' });
     if (existing) {
       return NextResponse.json({
         message: 'Already initialized',
-        recipesCount: (existing as unknown[]).length
+        recipesCount: (existing.value as unknown[]).length
       });
     }
 
     // Initialize with defaults
-    await kv.set('recipes', DEFAULT_RECIPES);
-    await kv.set('settings', { exclusions: ['beef', 'pork', 'shellfish'] });
-    await kv.set('current-plan', { weekStart: new Date().toISOString().split('T')[0], status: 'draft', meals: [] });
+    await collection.insertMany([
+      { _key: 'recipes', value: DEFAULT_RECIPES, updatedAt: new Date() },
+      { _key: 'settings', value: { exclusions: ['beef', 'pork', 'shellfish'] }, updatedAt: new Date() },
+      { _key: 'current-plan', value: { weekStart: new Date().toISOString().split('T')[0], status: 'draft', meals: [] }, updatedAt: new Date() }
+    ]);
 
     return NextResponse.json({
       message: 'Initialized successfully',
@@ -187,5 +201,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Init error:', error);
     return NextResponse.json({ error: 'Failed to initialize' }, { status: 500 });
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }
