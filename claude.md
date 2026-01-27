@@ -419,3 +419,31 @@ Analyze the week's meals to identify:
 - Meal history and analytics
 - Family member feedback system
 - Seasonal ingredient suggestions
+
+---
+
+## Planned Features
+
+### Multi-User Support (Next Up)
+
+**Purpose**: Allow multiple users to have separate logins with individual settings, enabling sharing with colleagues or family members.
+
+**Scope**:
+- User accounts stored in database
+- Per-user settings (exclusions, preferred cuisines, AI context, recipe websites)
+- Per-user meal plans
+- Separate recipe libraries or shared library with personal favorites
+
+**Implementation Approach**:
+- Extend NextAuth to support multiple user accounts
+- Add `userId` field to Settings, WeeklyPlan, and potentially Recipes
+- Update all data access functions to scope by user
+- Add user registration or invite system
+
+**Files to Modify**:
+- `lib/auth.ts` - Support multiple users
+- `lib/settings.ts` - Scope settings per user
+- `lib/plans.ts` - Scope plans per user
+- `lib/recipes.ts` - Consider shared vs. personal recipes
+- `types/index.ts` - Add User type, add userId to relevant types
+- Database schema updates for user accounts
