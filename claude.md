@@ -447,3 +447,46 @@ Analyze the week's meals to identify:
 - `lib/recipes.ts` - Consider shared vs. personal recipes
 - `types/index.ts` - Add User type, add userId to relevant types
 - Database schema updates for user accounts
+
+---
+
+### Meal Prep Suggestions (Post-Approval)
+
+**Purpose**: Once a weekly meal plan is approved, automatically generate actionable meal prep suggestions with a focus on weekend preparation to streamline weeknight cooking.
+
+**Trigger**: Fires when meal plan status changes to "approved"
+
+**Features**:
+- **Weekend Prep Schedule**: Suggest tasks for Saturday/Sunday to prep for the week ahead
+- **Batch Cooking Recommendations**: Identify proteins, grains, and sauces that can be made in bulk
+- **Vegetable Prep List**: Chop, wash, and store instructions for produce
+- **Marination Timelines**: Flag proteins that benefit from overnight or 24-hour marinades
+- **Storage Guidelines**: How long each prepped item stays fresh and proper storage methods
+- **Time Estimates**: Total weekend prep time with breakdown per task
+- **Day-Linking**: Connect each prep task to the specific meals it supports
+
+**Implementation Approach**:
+- Add Claude AI prompt to analyze approved meal plan and generate prep suggestions
+- Create PrepSuggestions component to display on approval confirmation
+- Store prep tasks in WeeklyPlan record
+- Optional: Send prep reminder notification on Saturday morning
+
+**Files to Create/Modify**:
+- `lib/claude.ts` - Add `generatePrepSuggestions()` function
+- `app/api/plan/prep-suggestions/route.ts` - API endpoint for prep generation
+- `components/PrepSuggestions.tsx` - UI component for displaying prep tasks
+- `app/plan/[id]/page.tsx` - Show prep suggestions after approval
+- `types/index.ts` - Add PrepTask and PrepSuggestion types
+
+**Data Format** (PrepTask):
+```json
+{
+  "id": "string",
+  "task": "Marinate chicken thighs in tikka masala spices",
+  "category": "proteins" | "vegetables" | "grains" | "sauces" | "spices",
+  "prepDay": "Saturday" | "Sunday",
+  "timeMinutes": 15,
+  "storageInstructions": "Refrigerate in sealed container for up to 3 days",
+  "linkedMeals": ["Monday Dinner", "Wednesday Dinner"]
+}
+```
