@@ -27,12 +27,54 @@ export async function updateMealApproval(day: string, approved: boolean): Promis
   return plan;
 }
 
-export async function replaceMeal(day: string, recipeId: string): Promise<WeeklyPlan> {
+export async function replaceMeal(
+  day: string,
+  recipeId: string,
+  targetAudience: 'adults' | 'kids' | 'both' = 'both'
+): Promise<WeeklyPlan> {
   const plan = await getCurrentPlan();
   const meal = plan.meals.find(m => m.day === day);
   if (meal) {
+    if (targetAudience === 'adults') {
+      meal.adultRecipeId = recipeId;
+      // If it was a shared meal, now it's not
+      if (meal.sharedMeal && meal.kidsRecipeId !== recipeId) {
+        meal.sharedMeal = false;
+      }
+    } else if (targetAudience === 'kids') {
+      meal.kidsRecipeId = recipeId;
+      // If it was a shared meal, now it's not
+      if (meal.sharedMeal && meal.adultRecipeId !== recipeId) {
+        meal.sharedMeal = false;
+      }
+    } else {
+      // Replace both
+      meal.adultRecipeId = recipeId;
+      meal.kidsRecipeId = recipeId;
+      meal.sharedMeal = true;
+    }
+    // Legacy support
     meal.recipeId = recipeId;
     meal.approved = false;
+  }
+  await savePlan(plan);
+  return plan;
+}
+
+export async function updateMealSharedStatus(
+  day: string,
+  sharedMeal: boolean,
+  kidsRecipeId?: string
+): Promise<WeeklyPlan> {
+  const plan = await getCurrentPlan();
+  const meal = plan.meals.find(m => m.day === day);
+  if (meal) {
+    meal.sharedMeal = sharedMeal;
+    if (sharedMeal && meal.adultRecipeId) {
+      meal.kidsRecipeId = meal.adultRecipeId;
+    } else if (kidsRecipeId) {
+      meal.kidsRecipeId = kidsRecipeId;
+    }
   }
   await savePlan(plan);
   return plan;

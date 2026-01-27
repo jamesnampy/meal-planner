@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Ingredient } from '@/types';
-import { getExclusions } from './settings';
+import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES } from '@/types';
+import { getSettings } from './settings';
 
 const anthropic = new Anthropic();
 
@@ -12,13 +12,85 @@ interface RecipeSuggestion {
   ingredients: Ingredient[];
   instructions: string[];
   kidFriendly: boolean;
+  targetAudience: 'adults' | 'kids' | 'both';
+  sourceWebsite?: string;
 }
 
-export async function searchRecipes(query: string): Promise<RecipeSuggestion[]> {
-  const exclusions = await getExclusions();
-  const exclusionClause = exclusions.length > 0
-    ? `\n\nIMPORTANT: Do NOT include any recipes containing these ingredients: ${exclusions.join(', ')}. These are dietary restrictions that must be followed.`
-    : '';
+interface DualMealSuggestion {
+  adultMeal: RecipeSuggestion;
+  kidsMeal: RecipeSuggestion;
+  sharedMeal: boolean;
+}
+
+function getCuisineLabels(cuisineIds: CuisineId[]): string {
+  return cuisineIds
+    .map(id => AVAILABLE_CUISINES.find(c => c.id === id)?.label || id)
+    .join(', ');
+}
+
+function buildContextPrompt(
+  aiContext: AIContext,
+  preferredCuisines: CuisineId[],
+  recipeWebsites: string[],
+  exclusions: string[],
+  targetAudience?: 'adults' | 'kids' | 'both'
+): string {
+  const sections: string[] = [];
+
+  if (preferredCuisines.length > 0) {
+    sections.push(`PREFERRED CUISINES (prioritize these):
+${getCuisineLabels(preferredCuisines)}`);
+  }
+
+  if (aiContext.adultPreferences || aiContext.kidsPreferences || aiContext.generalNotes) {
+    const contextLines: string[] = ['FAMILY CONTEXT:'];
+    if (aiContext.adultPreferences) {
+      contextLines.push(`- Adult preferences: ${aiContext.adultPreferences}`);
+    }
+    if (aiContext.kidsPreferences) {
+      contextLines.push(`- Kids preferences: ${aiContext.kidsPreferences}`);
+    }
+    if (aiContext.generalNotes) {
+      contextLines.push(`- General notes: ${aiContext.generalNotes}`);
+    }
+    sections.push(contextLines.join('\n'));
+  }
+
+  if (recipeWebsites.length > 0) {
+    sections.push(`RECIPE SOURCES (prefer recipes from these websites):
+${recipeWebsites.join(', ')}`);
+  }
+
+  if (exclusions.length > 0) {
+    sections.push(`EXCLUDED INGREDIENTS (do NOT use these - dietary restrictions):
+${exclusions.join(', ')}`);
+  }
+
+  if (targetAudience) {
+    const audienceGuidance = targetAudience === 'adults'
+      ? 'Focus on flavor complexity and health goals from preferred cuisines.'
+      : targetAudience === 'kids'
+      ? 'Focus on familiar flavors, easy textures, and mild tastes. Consider hidden veggie strategies.'
+      : 'Create a recipe that works for both adults and kids.';
+    sections.push(`TARGET AUDIENCE: ${targetAudience}
+${audienceGuidance}`);
+  }
+
+  return sections.join('\n\n');
+}
+
+export async function searchRecipes(
+  query: string,
+  targetAudience?: 'adults' | 'kids' | 'both'
+): Promise<RecipeSuggestion[]> {
+  const settings = await getSettings();
+  const contextPrompt = buildContextPrompt(
+    settings.aiContext,
+    settings.preferredCuisines,
+    settings.recipeWebsites,
+    settings.exclusions,
+    targetAudience
+  );
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -26,14 +98,18 @@ export async function searchRecipes(query: string): Promise<RecipeSuggestion[]> 
     messages: [
       {
         role: 'user',
-        content: `Search for recipes matching: "${query}"${exclusionClause}
+        content: `You are a meal planning assistant. Search for recipes matching: "${query}"
+
+${contextPrompt}
 
 Return 3 recipe suggestions as a JSON array. Each recipe should have:
 - name: Recipe name
-- cuisine: Type (american, italian, mexican, asian, indian-fusion, mediterranean, french, japanese, thai, other)
+- cuisine: Type (american, italian, mexican, asian, indian-fusion, mediterranean, french, japanese, thai, middle-eastern, greek, other)
 - prepTime: Prep time in minutes (number)
 - servings: Number of servings (number)
 - kidFriendly: Boolean - true if mild flavors, no spicy ingredients, familiar foods
+- targetAudience: "adults", "kids", or "both"
+- sourceWebsite: If inspired by a specific website from the sources list, include it (optional)
 - ingredients: Array of objects with:
   - name: Ingredient name
   - amount: Amount as string (e.g., "1", "0.5", "2")
@@ -41,20 +117,9 @@ Return 3 recipe suggestions as a JSON array. Each recipe should have:
   - category: One of "produce", "protein", "dairy", "pantry", "frozen", "other"
 - instructions: Array of step-by-step instruction strings
 
-Return ONLY valid JSON, no other text. Example format:
-[
-  {
-    "name": "Recipe Name",
-    "cuisine": "italian",
-    "prepTime": 30,
-    "servings": 4,
-    "kidFriendly": true,
-    "ingredients": [
-      {"name": "pasta", "amount": "1", "unit": "lb", "category": "pantry"}
-    ],
-    "instructions": ["Step 1", "Step 2"]
-  }
-]`
+Consider prep time optimization - suggest recipes that fit within weeknight time constraints from general notes.
+
+Return ONLY valid JSON, no other text.`
       }
     ]
   });
@@ -68,7 +133,6 @@ Return ONLY valid JSON, no other text. Example format:
     const recipes = JSON.parse(content.text);
     return recipes;
   } catch {
-    // Try to extract JSON from the response
     const jsonMatch = content.text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
@@ -78,13 +142,18 @@ Return ONLY valid JSON, no other text. Example format:
 }
 
 export async function generateMealSuggestion(
+  targetAudience: 'adults' | 'kids' | 'both' = 'both',
   cuisinePreference?: string,
   excludeRecipeNames?: string[]
 ): Promise<RecipeSuggestion> {
-  const exclusions = await getExclusions();
-  const ingredientExclusionClause = exclusions.length > 0
-    ? `- IMPORTANT: Do NOT use these ingredients (dietary restrictions): ${exclusions.join(', ')}`
-    : '';
+  const settings = await getSettings();
+  const contextPrompt = buildContextPrompt(
+    settings.aiContext,
+    settings.preferredCuisines,
+    settings.recipeWebsites,
+    settings.exclusions,
+    targetAudience
+  );
 
   const excludeClause = excludeRecipeNames?.length
     ? `Do NOT suggest these recipes (already in the plan): ${excludeRecipeNames.join(', ')}`
@@ -92,7 +161,7 @@ export async function generateMealSuggestion(
 
   const cuisineClause = cuisinePreference
     ? `Prefer ${cuisinePreference} cuisine.`
-    : 'Any cuisine is fine.';
+    : '';
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -102,21 +171,24 @@ export async function generateMealSuggestion(
         role: 'user',
         content: `Suggest a dinner recipe for a family meal.
 
+${contextPrompt}
+
 ${cuisineClause}
 ${excludeClause}
 
 Requirements:
-- Easy to prepare (under 45 minutes)
+- Easy to prepare (under 45 minutes, or per general notes)
 - Serves 4 people
 - Common ingredients available at most grocery stores
-${ingredientExclusionClause}
 
 Return a single recipe as JSON with:
 - name: Recipe name
-- cuisine: Type (american, italian, mexican, asian, indian-fusion, mediterranean, french, japanese, thai, other)
+- cuisine: Type (american, italian, mexican, asian, indian-fusion, mediterranean, french, japanese, thai, middle-eastern, greek, other)
 - prepTime: Prep time in minutes (number)
 - servings: Number of servings (number)
 - kidFriendly: Boolean
+- targetAudience: "${targetAudience}"
+- sourceWebsite: If inspired by a specific website from the sources list (optional)
 - ingredients: Array of objects with name, amount, unit, category
 - instructions: Array of step-by-step strings
 
@@ -138,5 +210,90 @@ Return ONLY valid JSON, no other text.`
       return JSON.parse(jsonMatch[0]);
     }
     throw new Error('Failed to parse meal suggestion');
+  }
+}
+
+export async function generateDualMealSuggestion(
+  day: string,
+  excludeRecipeNames?: string[]
+): Promise<DualMealSuggestion> {
+  const settings = await getSettings();
+  const contextPrompt = buildContextPrompt(
+    settings.aiContext,
+    settings.preferredCuisines,
+    settings.recipeWebsites,
+    settings.exclusions
+  );
+
+  const excludeClause = excludeRecipeNames?.length
+    ? `Do NOT suggest these recipes (already in the plan): ${excludeRecipeNames.join(', ')}`
+    : '';
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4096,
+    messages: [
+      {
+        role: 'user',
+        content: `Generate a dinner pair for ${day}:
+1. Adult meal: From preferred cuisines, complex flavors OK
+2. Kids meal: Simple, familiar, nutritious
+
+${contextPrompt}
+
+OPTIMIZATION GOALS:
+- Minimize total prep time
+- Share ingredients where possible
+- If a recipe works well for both adults AND kids, you may suggest the same recipe for both (set sharedMeal: true)
+
+${excludeClause}
+
+Return a JSON object with this structure:
+{
+  "adultMeal": {
+    "name": "Recipe Name",
+    "cuisine": "cuisine-type",
+    "prepTime": 30,
+    "servings": 4,
+    "kidFriendly": false,
+    "targetAudience": "adults",
+    "sourceWebsite": "optional-website.com",
+    "ingredients": [{"name": "...", "amount": "1", "unit": "lb", "category": "protein"}],
+    "instructions": ["Step 1", "Step 2"]
+  },
+  "kidsMeal": {
+    "name": "Recipe Name",
+    "cuisine": "cuisine-type",
+    "prepTime": 20,
+    "servings": 4,
+    "kidFriendly": true,
+    "targetAudience": "kids",
+    "sourceWebsite": "optional-website.com",
+    "ingredients": [{"name": "...", "amount": "1", "unit": "lb", "category": "protein"}],
+    "instructions": ["Step 1", "Step 2"]
+  },
+  "sharedMeal": false
+}
+
+If sharedMeal is true, both adultMeal and kidsMeal should be the same recipe (duplicate the recipe object).
+
+Return ONLY valid JSON, no other text.`
+      }
+    ]
+  });
+
+  const content = response.content[0];
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type');
+  }
+
+  try {
+    return JSON.parse(content.text);
+  } catch {
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Failed to parse dual meal suggestion');
   }
 }

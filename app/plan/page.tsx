@@ -2,7 +2,71 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { WeeklyPlan, Recipe } from '@/types';
+import { WeeklyPlan, Recipe, Meal } from '@/types';
+
+interface MealCardProps {
+  recipe: Recipe | null;
+  audience: 'adults' | 'kids';
+  isRegenerating: boolean;
+  onRegenerate: () => void;
+  onPickDifferent: () => void;
+  sourceWebsite?: string;
+}
+
+function MealCard({ recipe, audience, isRegenerating, onRegenerate, onPickDifferent, sourceWebsite }: MealCardProps) {
+  const icon = audience === 'adults' ? '🧑' : '👶';
+  const label = audience === 'adults' ? 'ADULT MEAL' : 'KIDS MEAL';
+
+  return (
+    <div className="p-4 bg-gray-50 rounded-lg">
+      <div className="flex items-center gap-2 mb-3">
+        <span>{icon}</span>
+        <span className="text-sm font-semibold text-gray-600 uppercase tracking-wide">{label}</span>
+      </div>
+
+      {recipe ? (
+        <div>
+          <h3 className="text-lg font-medium text-gray-800">{recipe.name}</h3>
+          <div className="flex flex-wrap gap-2 mt-1 text-sm text-gray-600">
+            <span className="capitalize">{recipe.cuisine}</span>
+            <span>•</span>
+            <span>{recipe.prepTime} min</span>
+            {sourceWebsite && (
+              <>
+                <span>•</span>
+                <span className="text-blue-600">{sourceWebsite}</span>
+              </>
+            )}
+          </div>
+          <div className="mt-3">
+            <p className="text-sm text-gray-600 line-clamp-2">
+              {recipe.ingredients.slice(0, 5).map(i => i.name).join(', ')}
+              {recipe.ingredients.length > 5 && ` +${recipe.ingredients.length - 5} more`}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-gray-500 italic">Recipe not found</p>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={onRegenerate}
+          disabled={isRegenerating}
+          className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50"
+        >
+          {isRegenerating ? 'Searching...' : 'AI Suggest'}
+        </button>
+        <button
+          onClick={onPickDifferent}
+          className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-100"
+        >
+          Pick Different
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function PlanPage() {
   const router = useRouter();
@@ -10,6 +74,7 @@ export default function PlanPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [regeneratingDay, setRegeneratingDay] = useState<string | null>(null);
+  const [regeneratingAudience, setRegeneratingAudience] = useState<'adults' | 'kids' | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -34,6 +99,24 @@ export default function PlanPage() {
 
   const getRecipeForMeal = (recipeId: string): Recipe | null => {
     return recipes.find(r => r.id === recipeId) || null;
+  };
+
+  // Helper to get recipe IDs from meal (handles legacy single recipeId)
+  const getMealRecipeIds = (meal: Meal): { adultRecipeId: string; kidsRecipeId: string; sharedMeal: boolean } => {
+    if (meal.adultRecipeId && meal.kidsRecipeId) {
+      return {
+        adultRecipeId: meal.adultRecipeId,
+        kidsRecipeId: meal.kidsRecipeId,
+        sharedMeal: meal.sharedMeal || false,
+      };
+    }
+    // Legacy support: single recipeId for both
+    const legacyId = meal.recipeId || '';
+    return {
+      adultRecipeId: legacyId,
+      kidsRecipeId: legacyId,
+      sharedMeal: true,
+    };
   };
 
   const handleApprove = async (day: string) => {
@@ -64,19 +147,19 @@ export default function PlanPage() {
     }
   };
 
-  const handleRegenerateWithAI = async (day: string) => {
+  const handleRegenerateWithAI = async (day: string, targetAudience: 'adults' | 'kids') => {
     setRegeneratingDay(day);
+    setRegeneratingAudience(targetAudience);
     try {
       const res = await fetch('/api/plan/regenerate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ day }),
+        body: JSON.stringify({ day, targetAudience }),
       });
       const data = await res.json();
       if (data.error) {
         alert(data.error);
       } else {
-        // Refresh data to get the new recipe and updated plan
         await fetchData();
       }
     } catch (error) {
@@ -84,20 +167,46 @@ export default function PlanPage() {
       alert('Failed to regenerate meal with AI');
     } finally {
       setRegeneratingDay(null);
+      setRegeneratingAudience(null);
     }
   };
 
-  const handleRegenerateFromExisting = async (day: string) => {
+  const handleRegenerateFromExisting = async (day: string, targetAudience: 'adults' | 'kids') => {
     try {
       const res = await fetch('/api/plan', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ day }),
+        body: JSON.stringify({ day, targetAudience }),
       });
       const updatedPlan = await res.json();
       setPlan(updatedPlan);
     } catch (error) {
       console.error('Failed to regenerate meal:', error);
+    }
+  };
+
+  const handleToggleSharedMeal = async (day: string) => {
+    if (!plan) return;
+
+    const meal = plan.meals.find(m => m.day === day);
+    if (!meal) return;
+
+    const { adultRecipeId, sharedMeal } = getMealRecipeIds(meal);
+
+    try {
+      const res = await fetch('/api/plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          day,
+          sharedMeal: !sharedMeal,
+          kidsRecipeId: !sharedMeal ? adultRecipeId : undefined,
+        }),
+      });
+      const updatedPlan = await res.json();
+      setPlan(updatedPlan);
+    } catch (error) {
+      console.error('Failed to toggle shared meal:', error);
     }
   };
 
@@ -132,7 +241,7 @@ export default function PlanPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Meal Plan Review</h1>
           <p className="text-gray-600 mt-1">
-            Week of {plan.weekStart} • {unapprovedCount} meals need approval
+            Week of {plan.weekStart} • {unapprovedCount} days need approval
           </p>
         </div>
         {unapprovedCount > 0 && (
@@ -145,10 +254,13 @@ export default function PlanPage() {
         )}
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {plan.meals.map((meal) => {
-          const recipe = getRecipeForMeal(meal.recipeId);
-          const isRegenerating = regeneratingDay === meal.day;
+          const { adultRecipeId, kidsRecipeId, sharedMeal } = getMealRecipeIds(meal);
+          const adultRecipe = getRecipeForMeal(adultRecipeId);
+          const kidsRecipe = getRecipeForMeal(kidsRecipeId);
+          const isRegeneratingAdult = regeneratingDay === meal.day && regeneratingAudience === 'adults';
+          const isRegeneratingKids = regeneratingDay === meal.day && regeneratingAudience === 'kids';
 
           return (
             <div
@@ -159,75 +271,114 @@ export default function PlanPage() {
                   : 'bg-white border-gray-200'
               }`}
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-xl font-semibold text-gray-900">{meal.day}</h2>
-                    <span className="text-sm text-gray-500">{meal.date}</span>
-                    {meal.approved && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
-                        Approved
-                      </span>
-                    )}
-                  </div>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-gray-900">{meal.day}</h2>
+                  <span className="text-sm text-gray-500">{meal.date}</span>
+                  {meal.approved && (
+                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                      Approved
+                    </span>
+                  )}
+                  {sharedMeal && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                      Shared Meal
+                    </span>
+                  )}
+                </div>
+                {!meal.approved && (
+                  <button
+                    onClick={() => handleApprove(meal.day)}
+                    className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+                  >
+                    Approve Day
+                  </button>
+                )}
+              </div>
 
-                  {recipe ? (
+              {/* Meal Cards */}
+              {sharedMeal ? (
+                /* Single shared meal display */
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span>🧑👶</span>
+                    <span className="text-sm font-semibold text-blue-700 uppercase tracking-wide">SHARED MEAL (Adults & Kids)</span>
+                  </div>
+                  {adultRecipe ? (
                     <div>
-                      <h3 className="text-lg font-medium text-gray-800">{recipe.name}</h3>
-                      <div className="flex gap-3 mt-1 text-sm text-gray-600">
-                        <span>{recipe.cuisine}</span>
+                      <h3 className="text-lg font-medium text-gray-800">{adultRecipe.name}</h3>
+                      <div className="flex flex-wrap gap-2 mt-1 text-sm text-gray-600">
+                        <span className="capitalize">{adultRecipe.cuisine}</span>
                         <span>•</span>
-                        <span>{recipe.prepTime} min</span>
+                        <span>{adultRecipe.prepTime} min</span>
                         <span>•</span>
-                        <span>{recipe.servings} servings</span>
-                        {recipe.kidFriendly && (
+                        <span>{adultRecipe.servings} servings</span>
+                        {adultRecipe.sourceWebsite && (
                           <>
                             <span>•</span>
-                            <span className="text-green-600">Kid-Friendly</span>
-                          </>
-                        )}
-                        {recipe.isFavorite && (
-                          <>
-                            <span>•</span>
-                            <span className="text-yellow-600">Favorite</span>
+                            <span className="text-blue-600">{adultRecipe.sourceWebsite}</span>
                           </>
                         )}
                       </div>
                       <div className="mt-3">
-                        <h4 className="text-sm font-medium text-gray-700 mb-1">Ingredients:</h4>
                         <p className="text-sm text-gray-600">
-                          {recipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ')}
+                          {adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ')}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <p className="text-gray-500 italic">Recipe not found</p>
                   )}
-                </div>
-
-                <div className="flex flex-col gap-2 ml-4">
-                  {!meal.approved && (
+                  <div className="flex gap-2 mt-4">
                     <button
-                      onClick={() => handleApprove(meal.day)}
-                      className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+                      onClick={() => handleRegenerateWithAI(meal.day, 'adults')}
+                      disabled={isRegeneratingAdult}
+                      className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50"
                     >
-                      Approve
+                      {isRegeneratingAdult ? 'Searching...' : 'AI Suggest'}
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleRegenerateWithAI(meal.day)}
-                    disabled={isRegenerating}
-                    className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                  >
-                    {isRegenerating ? 'AI Searching...' : 'AI Suggest'}
-                  </button>
-                  <button
-                    onClick={() => handleRegenerateFromExisting(meal.day)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
-                  >
-                    Pick Different
-                  </button>
+                    <button
+                      onClick={() => handleRegenerateFromExisting(meal.day, 'adults')}
+                      className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-100"
+                    >
+                      Pick Different
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                /* Separate adult and kids meals */
+                <div className="grid md:grid-cols-2 gap-4">
+                  <MealCard
+                    recipe={adultRecipe}
+                    audience="adults"
+                    isRegenerating={isRegeneratingAdult}
+                    onRegenerate={() => handleRegenerateWithAI(meal.day, 'adults')}
+                    onPickDifferent={() => handleRegenerateFromExisting(meal.day, 'adults')}
+                    sourceWebsite={adultRecipe?.sourceWebsite}
+                  />
+                  <MealCard
+                    recipe={kidsRecipe}
+                    audience="kids"
+                    isRegenerating={isRegeneratingKids}
+                    onRegenerate={() => handleRegenerateWithAI(meal.day, 'kids')}
+                    onPickDifferent={() => handleRegenerateFromExisting(meal.day, 'kids')}
+                    sourceWebsite={kidsRecipe?.sourceWebsite}
+                  />
+                </div>
+              )}
+
+              {/* Toggle shared meal */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sharedMeal}
+                    onChange={() => handleToggleSharedMeal(meal.day)}
+                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                  />
+                  <span className="text-sm text-gray-600">Use same meal for both adults and kids</span>
+                </label>
               </div>
             </div>
           );

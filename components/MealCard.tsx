@@ -7,6 +7,8 @@ interface MealCardProps {
   date: string;
   recipe: Recipe | null;
   approved: boolean;
+  targetAudience?: 'adults' | 'kids' | 'both';
+  sharedMeal?: boolean;
   onApprove: () => void;
   onRegenerate: () => void;
 }
@@ -16,6 +18,8 @@ export default function MealCard({
   date,
   recipe,
   approved,
+  targetAudience = 'both',
+  sharedMeal = false,
   onApprove,
   onRegenerate,
 }: MealCardProps) {
@@ -31,6 +35,9 @@ export default function MealCard({
     );
   }
 
+  const audienceIcon = targetAudience === 'adults' ? '🧑' : targetAudience === 'kids' ? '👶' : '🧑👶';
+  const audienceLabel = targetAudience === 'adults' ? 'Adults' : targetAudience === 'kids' ? 'Kids' : 'Everyone';
+
   return (
     <div
       className={`rounded-lg p-4 border-2 transition-colors ${
@@ -40,20 +47,43 @@ export default function MealCard({
       }`}
     >
       <div className="flex justify-between items-center mb-2">
-        <h3 className="font-semibold text-gray-800">{day}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-800">{day}</h3>
+          {sharedMeal && (
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+              Shared
+            </span>
+          )}
+        </div>
         <span className="text-sm text-gray-500">{date}</span>
       </div>
 
       <div className="mb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <span>{audienceIcon}</span>
+          <span className="text-xs font-medium text-gray-500 uppercase">{audienceLabel}</span>
+        </div>
         <p className="text-lg font-medium text-gray-900">{recipe.name}</p>
-        <div className="flex gap-2 mt-1">
+        <div className="flex flex-wrap gap-2 mt-1">
           <span className="text-xs text-gray-500">{recipe.prepTime} min</span>
           <span className="text-xs text-gray-500">•</span>
-          <span className="text-xs text-gray-500">{recipe.cuisine}</span>
+          <span className="text-xs text-gray-500 capitalize">{recipe.cuisine}</span>
+          {recipe.sourceWebsite && (
+            <>
+              <span className="text-xs text-gray-500">•</span>
+              <span className="text-xs text-blue-600">{recipe.sourceWebsite}</span>
+            </>
+          )}
           {recipe.kidFriendly && (
             <>
               <span className="text-xs text-gray-500">•</span>
               <span className="text-xs text-green-600">Kid-Friendly</span>
+            </>
+          )}
+          {recipe.isFavorite && (
+            <>
+              <span className="text-xs text-gray-500">•</span>
+              <span className="text-xs text-yellow-600">Favorite</span>
             </>
           )}
         </div>

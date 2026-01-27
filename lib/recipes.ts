@@ -21,6 +21,18 @@ export async function addRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> {
   return newRecipe;
 }
 
+export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
+  const recipes = await getRecipes();
+  const existingIndex = recipes.findIndex(r => r.id === recipe.id);
+  if (existingIndex >= 0) {
+    recipes[existingIndex] = recipe;
+  } else {
+    recipes.push(recipe);
+  }
+  await setData(RECIPES_KEY, recipes);
+  return recipe;
+}
+
 export async function updateRecipe(id: string, updates: Partial<Recipe>): Promise<Recipe | null> {
   const recipes = await getRecipes();
   const index = recipes.findIndex(r => r.id === id);
