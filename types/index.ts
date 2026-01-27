@@ -67,3 +67,24 @@ export interface Settings {
   aiContext: AIContext;
   recipeWebsites: string[];
 }
+
+export type PrepCategory = 'proteins' | 'vegetables' | 'grains' | 'sauces' | 'spices';
+export type PrepDay = 'Saturday' | 'Sunday';
+
+export interface PrepTask {
+  id: string;
+  task: string;
+  category: PrepCategory;
+  prepDay: PrepDay;
+  timeMinutes: number;
+  storageInstructions: string;
+  linkedMeals: string[];
+}
+
+export interface PrepSuggestions {
+  weekStart: string;
+  totalPrepTime: number;
+  saturdayTasks: PrepTask[];
+  sundayTasks: PrepTask[];
+  generatedAt: string;
+}
