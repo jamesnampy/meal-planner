@@ -1,16 +1,10 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { Recipe } from '@/types';
+import { getData, setData } from './storage';
 
-const DATA_PATH = path.join(process.cwd(), 'data', 'recipes.json');
+const RECIPES_KEY = 'recipes';
 
 export async function getRecipes(): Promise<Recipe[]> {
-  try {
-    const data = await fs.readFile(DATA_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
+  return getData<Recipe[]>(RECIPES_KEY, []);
 }
 
 export async function getRecipeById(id: string): Promise<Recipe | null> {
@@ -23,7 +17,7 @@ export async function addRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> {
   const newId = String(Math.max(0, ...recipes.map(r => parseInt(r.id))) + 1);
   const newRecipe: Recipe = { ...recipe, id: newId };
   recipes.push(newRecipe);
-  await fs.writeFile(DATA_PATH, JSON.stringify(recipes, null, 2));
+  await setData(RECIPES_KEY, recipes);
   return newRecipe;
 }
 
@@ -33,7 +27,7 @@ export async function updateRecipe(id: string, updates: Partial<Recipe>): Promis
   if (index === -1) return null;
 
   recipes[index] = { ...recipes[index], ...updates };
-  await fs.writeFile(DATA_PATH, JSON.stringify(recipes, null, 2));
+  await setData(RECIPES_KEY, recipes);
   return recipes[index];
 }
 
@@ -42,7 +36,7 @@ export async function deleteRecipe(id: string): Promise<boolean> {
   const filtered = recipes.filter(r => r.id !== id);
   if (filtered.length === recipes.length) return false;
 
-  await fs.writeFile(DATA_PATH, JSON.stringify(filtered, null, 2));
+  await setData(RECIPES_KEY, filtered);
   return true;
 }
 

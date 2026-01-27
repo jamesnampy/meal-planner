@@ -1,24 +1,20 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { WeeklyPlan, Meal } from '@/types';
+import { getData, setData } from './storage';
 
-const DATA_PATH = path.join(process.cwd(), 'data', 'current-plan.json');
+const PLAN_KEY = 'current-plan';
+
+const DEFAULT_PLAN: WeeklyPlan = {
+  weekStart: new Date().toISOString().split('T')[0],
+  status: 'draft',
+  meals: []
+};
 
 export async function getCurrentPlan(): Promise<WeeklyPlan> {
-  try {
-    const data = await fs.readFile(DATA_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return {
-      weekStart: new Date().toISOString().split('T')[0],
-      status: 'draft',
-      meals: []
-    };
-  }
+  return getData<WeeklyPlan>(PLAN_KEY, DEFAULT_PLAN);
 }
 
 export async function savePlan(plan: WeeklyPlan): Promise<void> {
-  await fs.writeFile(DATA_PATH, JSON.stringify(plan, null, 2));
+  await setData(PLAN_KEY, plan);
 }
 
 export async function updateMealApproval(day: string, approved: boolean): Promise<WeeklyPlan> {

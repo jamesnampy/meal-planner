@@ -1,24 +1,18 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { Settings } from '@/types';
+import { getData, setData } from './storage';
 
-const DATA_PATH = path.join(process.cwd(), 'data', 'settings.json');
+const SETTINGS_KEY = 'settings';
 
 const DEFAULT_SETTINGS: Settings = {
   exclusions: ['beef', 'pork', 'shellfish'],
 };
 
 export async function getSettings(): Promise<Settings> {
-  try {
-    const data = await fs.readFile(DATA_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  return getData<Settings>(SETTINGS_KEY, DEFAULT_SETTINGS);
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
-  await fs.writeFile(DATA_PATH, JSON.stringify(settings, null, 2));
+  await setData(SETTINGS_KEY, settings);
 }
 
 export async function getExclusions(): Promise<string[]> {
