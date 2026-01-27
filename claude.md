@@ -58,6 +58,70 @@ The app uses `claude-sonnet-4-20250514` for recipe generation.
 
 ---
 
+## New Features Implementation Plan
+
+### Feature 1: Security Login (Bot Protection)
+
+**Purpose**: Prevent unauthorized bot usage and protect API costs.
+
+**Implementation Approach**: NextAuth.js with simple password protection
+
+**Files to Create/Modify**:
+- `lib/auth.ts` - NextAuth configuration
+- `app/api/auth/[...nextauth]/route.ts` - Auth API route
+- `app/login/page.tsx` - Login page
+- `middleware.ts` - Protect all routes except login
+- `.env.local` - Add AUTH_SECRET and ADMIN_PASSWORD
+
+**Environment Variables**:
+```
+AUTH_SECRET=random-secret-for-jwt
+ADMIN_PASSWORD=your-chosen-password
+```
+
+**Flow**:
+1. User visits any page → redirected to /login if not authenticated
+2. User enters password → validated against ADMIN_PASSWORD
+3. Session created with JWT → user can access app
+4. Sessions expire after 7 days
+
+---
+
+### Feature 2: Recipe Exclusion List
+
+**Purpose**: Allow users to exclude certain ingredients (dietary restrictions, allergies, preferences).
+
+**Default Exclusions**: beef, pork, shellfish
+
+**Implementation Approach**:
+- Store exclusions in `data/settings.json`
+- Settings page to manage exclusions
+- Pass exclusions to Claude in all recipe prompts
+
+**Files to Create/Modify**:
+- `data/settings.json` - Store user preferences including exclusions
+- `types/index.ts` - Add Settings type
+- `lib/settings.ts` - Read/write settings
+- `app/settings/page.tsx` - Settings page UI
+- `app/api/settings/route.ts` - Settings API
+- `lib/claude.ts` - Update prompts to include exclusions
+- `components/Navigation.tsx` - Add Settings link
+
+**Data Format** (`data/settings.json`):
+```json
+{
+  "exclusions": ["beef", "pork", "shellfish"],
+  "customExclusions": []
+}
+```
+
+**Claude Prompt Update**:
+```
+IMPORTANT: Do NOT include recipes containing these ingredients: beef, pork, shellfish, [user additions]
+```
+
+---
+
 # Meal Planner Specification
 
 ## Overview

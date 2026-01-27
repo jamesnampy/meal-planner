@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
   { href: '/recipes', label: 'Recipes' },
   { href: '/plan', label: 'Meal Plan' },
   { href: '/shopping-list', label: 'Shopping List' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 export default function Navigation() {
@@ -20,7 +22,7 @@ export default function Navigation() {
           <Link href="/" className="text-xl font-bold text-emerald-600">
             Meal Planner
           </Link>
-          <div className="flex space-x-4">
+          <div className="flex items-center space-x-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -34,6 +36,12 @@ export default function Navigation() {
                 {item.label}
               </Link>
             ))}
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </div>

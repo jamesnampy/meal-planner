@@ -34,3 +34,7 @@ export interface ShoppingItem extends Ingredient {
   checked: boolean;
   recipeNames: string[];
 }
+
+export interface Settings {
+  exclusions: string[];
+}

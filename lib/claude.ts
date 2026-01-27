@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Ingredient } from '@/types';
+import { getExclusions } from './settings';
 
 const anthropic = new Anthropic();
 
@@ -14,13 +15,18 @@ interface RecipeSuggestion {
 }
 
 export async function searchRecipes(query: string): Promise<RecipeSuggestion[]> {
+  const exclusions = await getExclusions();
+  const exclusionClause = exclusions.length > 0
+    ? `\n\nIMPORTANT: Do NOT include any recipes containing these ingredients: ${exclusions.join(', ')}. These are dietary restrictions that must be followed.`
+    : '';
+
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
     messages: [
       {
         role: 'user',
-        content: `Search for recipes matching: "${query}"
+        content: `Search for recipes matching: "${query}"${exclusionClause}
 
 Return 3 recipe suggestions as a JSON array. Each recipe should have:
 - name: Recipe name
@@ -75,6 +81,11 @@ export async function generateMealSuggestion(
   cuisinePreference?: string,
   excludeRecipeNames?: string[]
 ): Promise<RecipeSuggestion> {
+  const exclusions = await getExclusions();
+  const ingredientExclusionClause = exclusions.length > 0
+    ? `- IMPORTANT: Do NOT use these ingredients (dietary restrictions): ${exclusions.join(', ')}`
+    : '';
+
   const excludeClause = excludeRecipeNames?.length
     ? `Do NOT suggest these recipes (already in the plan): ${excludeRecipeNames.join(', ')}`
     : '';
@@ -98,6 +109,7 @@ Requirements:
 - Easy to prepare (under 45 minutes)
 - Serves 4 people
 - Common ingredients available at most grocery stores
+${ingredientExclusionClause}
 
 Return a single recipe as JSON with:
 - name: Recipe name
