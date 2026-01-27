@@ -450,7 +450,7 @@ Analyze the week's meals to identify:
 
 ---
 
-### Meal Prep Suggestions (Post-Approval)
+### Meal Prep Suggestions (Post-Approval) ✅ IMPLEMENTED
 
 **Purpose**: Once a weekly meal plan is approved, automatically generate actionable meal prep suggestions with a focus on weekend preparation to streamline weeknight cooking.
 
@@ -465,18 +465,19 @@ Analyze the week's meals to identify:
 - **Time Estimates**: Total weekend prep time with breakdown per task
 - **Day-Linking**: Connect each prep task to the specific meals it supports
 
-**Implementation Approach**:
-- Add Claude AI prompt to analyze approved meal plan and generate prep suggestions
-- Create PrepSuggestions component to display on approval confirmation
-- Store prep tasks in WeeklyPlan record
-- Optional: Send prep reminder notification on Saturday morning
-
-**Files to Create/Modify**:
-- `lib/claude.ts` - Add `generatePrepSuggestions()` function
+**Files Created/Modified**:
+- `lib/claude.ts` - Added `generatePrepSuggestions()` function
 - `app/api/plan/prep-suggestions/route.ts` - API endpoint for prep generation
 - `components/PrepSuggestions.tsx` - UI component for displaying prep tasks
-- `app/plan/[id]/page.tsx` - Show prep suggestions after approval
-- `types/index.ts` - Add PrepTask and PrepSuggestion types
+- `app/plan/page.tsx` - Shows prep suggestions section after approval
+- `types/index.ts` - Added PrepTask and PrepSuggestions types
+
+**How to Use**:
+1. Generate and approve a weekly meal plan
+2. After approval, a "Weekend Meal Prep" section appears
+3. Click to expand and view AI-generated prep suggestions
+4. Tasks are organized by Saturday (items that keep well) and Sunday (fresher items)
+5. Use "Regenerate Suggestions" button for alternative prep plans
 
 **Data Format** (PrepTask):
 ```json
@@ -490,3 +491,6 @@ Analyze the week's meals to identify:
   "linkedMeals": ["Monday Dinner", "Wednesday Dinner"]
 }
 ```
+
+**Future Enhancements**:
+- Send prep reminder notification on Saturday morning
