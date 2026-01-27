@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES } from '@/types';
+import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES, PrepTask, PrepSuggestions, Recipe } from '@/types';
 import { getSettings } from './settings';
 
 const anthropic = new Anthropic();
@@ -296,4 +296,117 @@ Return ONLY valid JSON, no other text.`
     }
     throw new Error('Failed to parse dual meal suggestion');
   }
+}
+
+interface MealWithRecipe {
+  day: string;
+  date: string;
+  adultRecipe: Recipe | null;
+  kidsRecipe: Recipe | null;
+  sharedMeal: boolean;
+}
+
+export async function generatePrepSuggestions(
+  weekStart: string,
+  meals: MealWithRecipe[]
+): Promise<PrepSuggestions> {
+  const settings = await getSettings();
+
+  // Build meal summary for Claude
+  const mealSummary = meals.map(m => {
+    const recipes: string[] = [];
+    if (m.adultRecipe) {
+      const ingredients = m.adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ');
+      recipes.push(`Adult: ${m.adultRecipe.name} (${ingredients})`);
+    }
+    if (m.kidsRecipe && !m.sharedMeal) {
+      const ingredients = m.kidsRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ');
+      recipes.push(`Kids: ${m.kidsRecipe.name} (${ingredients})`);
+    }
+    return `${m.day} (${m.date}):\n${recipes.join('\n')}`;
+  }).join('\n\n');
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4096,
+    messages: [
+      {
+        role: 'user',
+        content: `You are a meal prep planning assistant. Analyze the following weekly meal plan and generate weekend prep suggestions to make weeknight cooking faster and easier.
+
+WEEKLY MEAL PLAN:
+${mealSummary}
+
+USER CONTEXT:
+${settings.aiContext.generalNotes || 'No specific notes'}
+
+Generate a comprehensive weekend prep plan with tasks for Saturday and Sunday. Focus on:
+1. **Proteins**: Marinating, portioning, or par-cooking meats/tofu
+2. **Vegetables**: Washing, chopping, and storing produce
+3. **Grains**: Cooking rice, quinoa, or other grains in batches
+4. **Sauces**: Making dressings, marinades, or sauces ahead
+5. **Spices**: Pre-mixing spice blends used in multiple recipes
+
+For each task, specify:
+- Which day (Saturday or Sunday) is best
+- Time estimate in minutes
+- Storage instructions
+- Which meals it supports
+
+Return a JSON object with this structure:
+{
+  "tasks": [
+    {
+      "id": "unique-id",
+      "task": "Description of the prep task",
+      "category": "proteins" | "vegetables" | "grains" | "sauces" | "spices",
+      "prepDay": "Saturday" | "Sunday",
+      "timeMinutes": 15,
+      "storageInstructions": "How to store and how long it keeps",
+      "linkedMeals": ["Monday Dinner", "Wednesday Dinner"]
+    }
+  ],
+  "totalPrepTime": 90
+}
+
+Guidelines:
+- Saturday tasks should focus on items that keep well (marinades, spice blends, hearty vegetables)
+- Sunday tasks can include items that are best prepped closer to use (delicate greens, fresh herbs)
+- Include batching opportunities where ingredients overlap between meals
+- Keep individual tasks focused and actionable
+- Aim for 5-10 meaningful prep tasks total
+
+Return ONLY valid JSON, no other text.`
+      }
+    ]
+  });
+
+  const content = response.content[0];
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type');
+  }
+
+  let parsed: { tasks: PrepTask[]; totalPrepTime: number };
+  try {
+    parsed = JSON.parse(content.text);
+  } catch {
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error('Failed to parse prep suggestions');
+    }
+  }
+
+  // Organize tasks by day
+  const saturdayTasks = parsed.tasks.filter(t => t.prepDay === 'Saturday');
+  const sundayTasks = parsed.tasks.filter(t => t.prepDay === 'Sunday');
+
+  return {
+    weekStart,
+    totalPrepTime: parsed.totalPrepTime,
+    saturdayTasks,
+    sundayTasks,
+    generatedAt: new Date().toISOString(),
+  };
 }

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { WeeklyPlan, Recipe, Meal } from '@/types';
+import { WeeklyPlan, Recipe, Meal, PrepSuggestions as PrepSuggestionsType } from '@/types';
+import PrepSuggestions from '@/components/PrepSuggestions';
 
 interface MealCardProps {
   recipe: Recipe | null;
@@ -75,6 +76,9 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(true);
   const [regeneratingDay, setRegeneratingDay] = useState<string | null>(null);
   const [regeneratingAudience, setRegeneratingAudience] = useState<'adults' | 'kids' | null>(null);
+  const [prepSuggestions, setPrepSuggestions] = useState<PrepSuggestionsType | null>(null);
+  const [loadingPrep, setLoadingPrep] = useState(false);
+  const [showPrepSection, setShowPrepSection] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -207,6 +211,27 @@ export default function PlanPage() {
       setPlan(updatedPlan);
     } catch (error) {
       console.error('Failed to toggle shared meal:', error);
+    }
+  };
+
+  const handleGeneratePrepSuggestions = async () => {
+    setLoadingPrep(true);
+    setShowPrepSection(true);
+    try {
+      const res = await fetch('/api/plan/prep-suggestions', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        setPrepSuggestions(data);
+      }
+    } catch (error) {
+      console.error('Failed to generate prep suggestions:', error);
+      alert('Failed to generate prep suggestions');
+    } finally {
+      setLoadingPrep(false);
     }
   };
 
@@ -386,16 +411,76 @@ export default function PlanPage() {
       </div>
 
       {plan.status === 'approved' && (
-        <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-800 text-center">
-            All meals approved! View your{' '}
+        <div className="mt-8 space-y-6">
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800 text-center">
+              All meals approved! View your{' '}
+              <button
+                onClick={() => router.push('/shopping-list')}
+                className="underline font-medium"
+              >
+                shopping list
+              </button>
+            </p>
+          </div>
+
+          {/* Prep Suggestions Section */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
             <button
-              onClick={() => router.push('/shopping-list')}
-              className="underline font-medium"
+              onClick={() => {
+                if (!showPrepSection) {
+                  setShowPrepSection(true);
+                  if (!prepSuggestions && !loadingPrep) {
+                    handleGeneratePrepSuggestions();
+                  }
+                } else {
+                  setShowPrepSection(!showPrepSection);
+                }
+              }}
+              className="w-full p-4 bg-gradient-to-r from-purple-50 to-indigo-50 flex items-center justify-between hover:from-purple-100 hover:to-indigo-100 transition-colors"
             >
-              shopping list
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🍳</span>
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-800">Weekend Meal Prep</h3>
+                  <p className="text-sm text-gray-600">Get AI-powered prep suggestions for the week ahead</p>
+                </div>
+              </div>
+              <span className="text-gray-400 text-xl">
+                {showPrepSection ? '▲' : '▼'}
+              </span>
             </button>
-          </p>
+
+            {showPrepSection && (
+              <div className="p-6 bg-white">
+                {loadingPrep ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+                    <p className="text-gray-600">Analyzing your meal plan and generating prep suggestions...</p>
+                  </div>
+                ) : prepSuggestions ? (
+                  <div>
+                    <PrepSuggestions suggestions={prepSuggestions} />
+                    <button
+                      onClick={handleGeneratePrepSuggestions}
+                      className="mt-4 px-4 py-2 text-sm text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50"
+                    >
+                      Regenerate Suggestions
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <button
+                      onClick={handleGeneratePrepSuggestions}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      Generate Prep Suggestions
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
