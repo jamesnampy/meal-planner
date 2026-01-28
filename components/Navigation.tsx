@@ -9,6 +9,7 @@ const navItems = [
   { href: '/recipes', label: 'Recipes' },
   { href: '/plan', label: 'Meal Plan' },
   { href: '/shopping-list', label: 'Shopping List' },
+  { href: '/prep', label: 'Weekly Prep' },
   { href: '/settings', label: 'Settings' },
 ];
 

@@ -68,22 +68,33 @@ export interface Settings {
   recipeWebsites: string[];
 }
 
-export type PrepCategory = 'proteins' | 'vegetables' | 'grains' | 'sauces' | 'spices';
+export type PrepTaskCategory =
+  | 'vegetable-prep'
+  | 'protein-prep'
+  | 'grain-cooking'
+  | 'sauce-dressing'
+  | 'spice-blend'
+  | 'other';
+
 export type PrepDay = 'Saturday' | 'Sunday';
 
 export interface PrepTask {
   id: string;
-  task: string;
-  category: PrepCategory;
+  category: PrepTaskCategory;
   prepDay: PrepDay;
-  timeMinutes: number;
+  title: string;
+  description: string;
+  estimatedMinutes: number;
   storageInstructions: string;
-  linkedMeals: string[];
+  ingredients: string[];
+  linkedRecipeNames: string[];
+  linkedMealDays: string[];
+  completed: boolean;
 }
 
-export interface PrepSuggestions {
+export interface WeeklyPrepPlan {
   weekStart: string;
-  totalPrepTime: number;
+  totalPrepTimeMinutes: number;
   saturdayTasks: PrepTask[];
   sundayTasks: PrepTask[];
   generatedAt: string;

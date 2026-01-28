@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES, PrepTask, PrepSuggestions, Recipe } from '@/types';
+import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES, PrepTask, PrepTaskCategory, PrepDay, Recipe } from '@/types';
 import { getSettings } from './settings';
 
 const anthropic = new Anthropic();
@@ -298,33 +298,18 @@ Return ONLY valid JSON, no other text.`
   }
 }
 
-interface MealWithRecipe {
+export interface MealWithDay {
   day: string;
-  date: string;
-  adultRecipe: Recipe | null;
-  kidsRecipe: Recipe | null;
-  sharedMeal: boolean;
+  recipeName: string;
+  ingredients: string[];
 }
 
-export async function generatePrepSuggestions(
-  weekStart: string,
-  meals: MealWithRecipe[]
-): Promise<PrepSuggestions> {
+export async function generatePrepTasks(meals: MealWithDay[]): Promise<PrepTask[]> {
   const settings = await getSettings();
 
-  // Build meal summary for Claude
-  const mealSummary = meals.map(m => {
-    const recipes: string[] = [];
-    if (m.adultRecipe) {
-      const ingredients = m.adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ');
-      recipes.push(`Adult: ${m.adultRecipe.name} (${ingredients})`);
-    }
-    if (m.kidsRecipe && !m.sharedMeal) {
-      const ingredients = m.kidsRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ');
-      recipes.push(`Kids: ${m.kidsRecipe.name} (${ingredients})`);
-    }
-    return `${m.day} (${m.date}):\n${recipes.join('\n')}`;
-  }).join('\n\n');
+  const mealSummary = meals.map(m =>
+    `${m.day}: ${m.recipeName}\n  Ingredients: ${m.ingredients.join(', ')}`
+  ).join('\n\n');
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -332,51 +317,49 @@ export async function generatePrepSuggestions(
     messages: [
       {
         role: 'user',
-        content: `You are a meal prep planning assistant. Analyze the following weekly meal plan and generate weekend prep suggestions to make weeknight cooking faster and easier.
+        content: `You are a meal prep planning assistant. Analyze the following weekly meal plan and generate weekend prep tasks to streamline weeknight cooking.
 
-WEEKLY MEAL PLAN:
+WEEKLY MEALS:
 ${mealSummary}
 
 USER CONTEXT:
 ${settings.aiContext.generalNotes || 'No specific notes'}
 
-Generate a comprehensive weekend prep plan with tasks for Saturday and Sunday. Focus on:
-1. **Proteins**: Marinating, portioning, or par-cooking meats/tofu
-2. **Vegetables**: Washing, chopping, and storing produce
-3. **Grains**: Cooking rice, quinoa, or other grains in batches
-4. **Sauces**: Making dressings, marinades, or sauces ahead
-5. **Spices**: Pre-mixing spice blends used in multiple recipes
+Generate prep tasks for Saturday and Sunday. IMPORTANT: Combine similar tasks across meals where possible (e.g., if multiple recipes use onions, create ONE task to chop all onions needed for the week).
 
-For each task, specify:
-- Which day (Saturday or Sunday) is best
-- Time estimate in minutes
-- Storage instructions
-- Which meals it supports
+Categories to use:
+- "vegetable-prep": Washing, chopping, storing produce
+- "protein-prep": Marinating, portioning, par-cooking meats/tofu
+- "grain-cooking": Batch cooking rice, quinoa, pasta, etc.
+- "sauce-dressing": Making sauces, dressings, marinades ahead
+- "spice-blend": Pre-mixing spice blends
+- "other": Any other prep tasks
 
-Return a JSON object with this structure:
-{
-  "tasks": [
-    {
-      "id": "unique-id",
-      "task": "Description of the prep task",
-      "category": "proteins" | "vegetables" | "grains" | "sauces" | "spices",
-      "prepDay": "Saturday" | "Sunday",
-      "timeMinutes": 15,
-      "storageInstructions": "How to store and how long it keeps",
-      "linkedMeals": ["Monday Dinner", "Wednesday Dinner"]
-    }
-  ],
-  "totalPrepTime": 90
-}
+Return a JSON array of tasks with this structure:
+[
+  {
+    "id": "task-1",
+    "category": "vegetable-prep",
+    "prepDay": "Saturday",
+    "title": "Chop onions and garlic",
+    "description": "Dice 4 onions and mince 2 heads of garlic for the week's recipes",
+    "estimatedMinutes": 15,
+    "storageInstructions": "Store in separate airtight containers. Onions last 7 days, garlic lasts 5 days refrigerated.",
+    "ingredients": ["4 onions", "2 heads garlic"],
+    "linkedRecipeNames": ["Chicken Tikka Masala", "Pasta Primavera"],
+    "linkedMealDays": ["Monday", "Wednesday"]
+  }
+]
 
 Guidelines:
-- Saturday tasks should focus on items that keep well (marinades, spice blends, hearty vegetables)
-- Sunday tasks can include items that are best prepped closer to use (delicate greens, fresh herbs)
-- Include batching opportunities where ingredients overlap between meals
-- Keep individual tasks focused and actionable
-- Aim for 5-10 meaningful prep tasks total
+- Saturday: Items that keep well (marinades, spice blends, hearty vegetables like carrots, celery)
+- Sunday: Items best prepped fresh (delicate greens, herbs, items used early in the week)
+- Combine overlapping ingredients into single tasks
+- Be specific about quantities and storage
+- Aim for 5-10 meaningful tasks total
+- Each task should have a clear, actionable title
 
-Return ONLY valid JSON, no other text.`
+Return ONLY the JSON array, no other text.`
       }
     ]
   });
@@ -386,27 +369,42 @@ Return ONLY valid JSON, no other text.`
     throw new Error('Unexpected response type');
   }
 
-  let parsed: { tasks: PrepTask[]; totalPrepTime: number };
+  let tasks: Array<{
+    id: string;
+    category: string;
+    prepDay: string;
+    title: string;
+    description: string;
+    estimatedMinutes: number;
+    storageInstructions: string;
+    ingredients: string[];
+    linkedRecipeNames: string[];
+    linkedMealDays: string[];
+  }>;
+
   try {
-    parsed = JSON.parse(content.text);
+    tasks = JSON.parse(content.text);
   } catch {
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    const jsonMatch = content.text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
+      tasks = JSON.parse(jsonMatch[0]);
     } else {
-      throw new Error('Failed to parse prep suggestions');
+      throw new Error('Failed to parse prep tasks');
     }
   }
 
-  // Organize tasks by day
-  const saturdayTasks = parsed.tasks.filter(t => t.prepDay === 'Saturday');
-  const sundayTasks = parsed.tasks.filter(t => t.prepDay === 'Sunday');
-
-  return {
-    weekStart,
-    totalPrepTime: parsed.totalPrepTime,
-    saturdayTasks,
-    sundayTasks,
-    generatedAt: new Date().toISOString(),
-  };
+  // Map to PrepTask with completed: false and ensure correct types
+  return tasks.map(t => ({
+    id: t.id,
+    category: t.category as PrepTaskCategory,
+    prepDay: t.prepDay as PrepDay,
+    title: t.title,
+    description: t.description,
+    estimatedMinutes: t.estimatedMinutes,
+    storageInstructions: t.storageInstructions,
+    ingredients: t.ingredients,
+    linkedRecipeNames: t.linkedRecipeNames,
+    linkedMealDays: t.linkedMealDays,
+    completed: false,
+  }));
 }
