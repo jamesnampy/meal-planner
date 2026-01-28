@@ -7,7 +7,7 @@ import WeeklyCalendar from '@/components/WeeklyCalendar';
 
 export default function Dashboard() {
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
@@ -17,14 +17,14 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     try {
-      const [planRes, recipesRes] = await Promise.all([
+      const [planRes, favoritesRes] = await Promise.all([
         fetch('/api/plan'),
         fetch('/api/recipes'),
       ]);
       const planData = await planRes.json();
-      const recipesData = await recipesRes.json();
+      const favoritesData = await favoritesRes.json();
       setPlan(planData);
-      setRecipes(recipesData);
+      setFavorites(favoritesData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -44,6 +44,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to generate plan:', error);
+      alert('Failed to generate meal plan. Make sure your API key is configured.');
     } finally {
       setGenerating(false);
     }
@@ -60,20 +61,6 @@ export default function Dashboard() {
       setPlan(updatedPlan);
     } catch (error) {
       console.error('Failed to approve meal:', error);
-    }
-  };
-
-  const handleRegenerate = async (day: string) => {
-    try {
-      const res = await fetch('/api/plan', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ day }),
-      });
-      const updatedPlan = await res.json();
-      setPlan(updatedPlan);
-    } catch (error) {
-      console.error('Failed to regenerate meal:', error);
     }
   };
 
@@ -102,7 +89,7 @@ export default function Dashboard() {
         <div className="flex gap-3">
           <button
             onClick={generatePlan}
-            disabled={generating || recipes.length < 5}
+            disabled={generating}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {generating ? 'Generating...' : 'Generate Plan'}
@@ -118,33 +105,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {recipes.length < 5 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <p className="text-yellow-800">
-            You need at least 5 recipes to generate a meal plan.{' '}
-            <Link href="/recipes/new" className="underline font-medium">
-              Add more recipes
-            </Link>
+      {generating && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+          <p className="text-purple-800">
+            AI is generating your personalized meal plan. This may take a moment...
           </p>
         </div>
       )}
 
-      {plan && (
-        <WeeklyCalendar
-          plan={plan}
-          recipes={recipes}
-          onApprove={handleApprove}
-          onRegenerate={handleRegenerate}
-        />
-      )}
+      {plan && <WeeklyCalendar plan={plan} onApprove={handleApprove} />}
 
       <div className="mt-12 grid md:grid-cols-3 gap-6">
         <Link
           href="/recipes"
           className="block p-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow"
         >
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Recipe Library</h2>
-          <p className="text-gray-600">{recipes.length} recipes saved</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Favorite Recipes</h2>
+          <p className="text-gray-600">{favorites.length} favorites saved</p>
         </Link>
         <Link
           href="/plan"

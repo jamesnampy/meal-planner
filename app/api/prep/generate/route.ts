@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getCurrentPlan } from '@/lib/plans';
-import { getRecipeById } from '@/lib/recipes';
 import { generatePrepTasks, MealWithDay } from '@/lib/claude';
 import { savePrepPlan } from '@/lib/prep';
 import { WeeklyPrepPlan } from '@/types';
@@ -23,32 +22,25 @@ export async function POST() {
       );
     }
 
-    // Build simplified meal data for Claude
+    // Build simplified meal data for Claude from embedded recipes
     const mealsWithDay: MealWithDay[] = [];
 
     for (const meal of plan.meals) {
-      const adultRecipeId = meal.adultRecipeId || meal.recipeId || '';
-      const kidsRecipeId = meal.kidsRecipeId || meal.recipeId || '';
-
-      const [adultRecipe, kidsRecipe] = await Promise.all([
-        getRecipeById(adultRecipeId),
-        getRecipeById(kidsRecipeId),
-      ]);
-
-      if (adultRecipe) {
+      // Adult recipe is embedded directly
+      if (meal.adultRecipe) {
         mealsWithDay.push({
           day: meal.day,
-          recipeName: adultRecipe.name,
-          ingredients: adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`),
+          recipeName: meal.adultRecipe.name,
+          ingredients: meal.adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`),
         });
       }
 
       // Only add kids meal if it's different from adult meal
-      if (kidsRecipe && !meal.sharedMeal && kidsRecipe.id !== adultRecipe?.id) {
+      if (meal.kidsRecipe && !meal.sharedMeal) {
         mealsWithDay.push({
           day: `${meal.day} (Kids)`,
-          recipeName: kidsRecipe.name,
-          ingredients: kidsRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`),
+          recipeName: meal.kidsRecipe.name,
+          ingredients: meal.kidsRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`),
         });
       }
     }

@@ -5,53 +5,41 @@ import Link from 'next/link';
 import { Recipe } from '@/types';
 import RecipeCard from '@/components/RecipeCard';
 
-export default function RecipesPage() {
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+export default function FavoritesPage() {
+  const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'favorites' | 'kid-friendly'>('all');
+  const [filter, setFilter] = useState<'all' | 'adults' | 'kids'>('all');
 
   useEffect(() => {
-    fetchRecipes();
+    fetchFavorites();
   }, []);
 
-  const fetchRecipes = async () => {
+  const fetchFavorites = async () => {
     try {
       const res = await fetch('/api/recipes');
       const data = await res.json();
-      setRecipes(data);
+      setFavorites(data);
     } catch (error) {
-      console.error('Failed to fetch recipes:', error);
+      console.error('Failed to fetch favorites:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleFavorite = async (id: string) => {
-    try {
-      const res = await fetch(`/api/recipes?id=${id}&action=favorite`, {
-        method: 'PATCH',
-      });
-      const updated = await res.json();
-      setRecipes(recipes.map(r => (r.id === id ? updated : r)));
-    } catch (error) {
-      console.error('Failed to toggle favorite:', error);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this recipe?')) return;
+  const handleRemoveFromFavorites = async (id: string) => {
+    if (!confirm('Remove this recipe from favorites?')) return;
 
     try {
       await fetch(`/api/recipes?id=${id}`, { method: 'DELETE' });
-      setRecipes(recipes.filter(r => r.id !== id));
+      setFavorites(favorites.filter(r => r.id !== id));
     } catch (error) {
-      console.error('Failed to delete recipe:', error);
+      console.error('Failed to remove from favorites:', error);
     }
   };
 
-  const filteredRecipes = recipes.filter(recipe => {
-    if (filter === 'favorites') return recipe.isFavorite;
-    if (filter === 'kid-friendly') return recipe.kidFriendly;
+  const filteredFavorites = favorites.filter(recipe => {
+    if (filter === 'adults') return recipe.targetAudience === 'adults' || recipe.targetAudience === 'both';
+    if (filter === 'kids') return recipe.kidFriendly || recipe.targetAudience === 'kids' || recipe.targetAudience === 'both';
     return true;
   });
 
@@ -66,25 +54,22 @@ export default function RecipesPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Recipe Library</h1>
-        <div className="flex gap-3">
-          <Link
-            href="/recipes/new"
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            Add Recipe
-          </Link>
-          <Link
-            href="/recipes/new?ai=true"
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            AI Search
-          </Link>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Favorite Recipes</h1>
+          <p className="text-gray-600 mt-1">
+            Your saved recipes from previous meal plans
+          </p>
         </div>
+        <Link
+          href="/recipes/new?ai=true"
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          AI Search
+        </Link>
       </div>
 
       <div className="flex gap-2 mb-6">
-        {(['all', 'favorites', 'kid-friendly'] as const).map((f) => (
+        {(['all', 'adults', 'kids'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -94,29 +79,46 @@ export default function RecipesPage() {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {f === 'all' ? 'All' : f === 'favorites' ? 'Favorites' : 'Kid-Friendly'}
+            {f === 'all' ? 'All' : f === 'adults' ? 'Adult Meals' : 'Kid-Friendly'}
           </button>
         ))}
       </div>
 
-      {filteredRecipes.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No recipes found.</p>
-          <Link
-            href="/recipes/new"
-            className="text-emerald-600 hover:underline mt-2 inline-block"
+      {filteredFavorites.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <svg
+            className="mx-auto h-12 w-12 text-gray-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            Add your first recipe
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+            />
+          </svg>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">No favorites yet</h3>
+          <p className="mt-2 text-gray-500">
+            Generate a meal plan and mark recipes as favorites to save them here.
+          </p>
+          <Link
+            href="/"
+            className="mt-4 inline-block text-emerald-600 hover:underline"
+          >
+            Go to Dashboard
           </Link>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRecipes.map((recipe) => (
+          {filteredFavorites.map((recipe) => (
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
-              onToggleFavorite={handleToggleFavorite}
-              onDelete={handleDelete}
+              onToggleFavorite={() => {}} // Already a favorite
+              onDelete={() => handleRemoveFromFavorites(recipe.id)}
+              showDeleteAsRemove
             />
           ))}
         </div>

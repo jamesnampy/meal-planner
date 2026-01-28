@@ -7,6 +7,7 @@ interface RecipeCardProps {
   onToggleFavorite?: (id: string) => void;
   onDelete?: (id: string) => void;
   showActions?: boolean;
+  showDeleteAsRemove?: boolean;
 }
 
 export default function RecipeCard({
@@ -14,6 +15,7 @@ export default function RecipeCard({
   onToggleFavorite,
   onDelete,
   showActions = true,
+  showDeleteAsRemove = false,
 }: RecipeCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
@@ -61,7 +63,7 @@ export default function RecipeCard({
             onClick={() => onDelete(recipe.id)}
             className="text-red-600 hover:text-red-800 text-sm font-medium"
           >
-            Delete
+            {showDeleteAsRemove ? 'Remove from Favorites' : 'Delete'}
           </button>
         </div>
       )}

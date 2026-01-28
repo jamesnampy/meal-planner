@@ -304,6 +304,14 @@ export interface MealWithDay {
   ingredients: string[];
 }
 
+export interface GeneratedMeal {
+  day: string;
+  date: string;
+  adultRecipe: RecipeSuggestion;
+  kidsRecipe: RecipeSuggestion;
+  sharedMeal: boolean;
+}
+
 export async function generatePrepTasks(meals: MealWithDay[]): Promise<PrepTask[]> {
   const settings = await getSettings();
 
@@ -407,4 +415,180 @@ Return ONLY the JSON array, no other text.`
     linkedMealDays: t.linkedMealDays,
     completed: false,
   }));
+}
+
+export async function generateWeeklyMeals(
+  weekDates: { day: string; date: string }[]
+): Promise<GeneratedMeal[]> {
+  const settings = await getSettings();
+  const contextPrompt = buildContextPrompt(
+    settings.aiContext,
+    settings.preferredCuisines,
+    settings.recipeWebsites,
+    settings.exclusions
+  );
+
+  const daysDescription = weekDates
+    .map(d => `${d.day} (${d.date})`)
+    .join(', ');
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 8192,
+    messages: [
+      {
+        role: 'user',
+        content: `Generate a complete weekly dinner plan for a family with 5 weekday meals.
+
+${contextPrompt}
+
+DAYS TO PLAN: ${daysDescription}
+
+For EACH day, generate:
+1. An ADULT meal: From preferred cuisines, can have complex flavors
+2. A KIDS meal: Simple, familiar, nutritious, kid-friendly
+
+IMPORTANT GUIDELINES:
+- Ensure variety across the week (different proteins, cuisines, cooking methods)
+- Don't repeat the same main protein on consecutive days
+- Balance cuisines throughout the week
+- If a recipe works well for both adults AND kids, you may use the same recipe for both (set sharedMeal: true)
+- Keep prep times under 45 minutes for weeknight cooking
+- Use common ingredients available at most grocery stores
+
+Return a JSON array with this structure:
+[
+  {
+    "day": "Monday",
+    "date": "2024-01-15",
+    "sharedMeal": false,
+    "adultRecipe": {
+      "name": "Recipe Name",
+      "cuisine": "cuisine-type",
+      "prepTime": 30,
+      "servings": 4,
+      "kidFriendly": false,
+      "targetAudience": "adults",
+      "sourceWebsite": "optional-website.com",
+      "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
+      "instructions": ["Step 1", "Step 2"]
+    },
+    "kidsRecipe": {
+      "name": "Recipe Name",
+      "cuisine": "cuisine-type",
+      "prepTime": 20,
+      "servings": 4,
+      "kidFriendly": true,
+      "targetAudience": "kids",
+      "sourceWebsite": "optional-website.com",
+      "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
+      "instructions": ["Step 1", "Step 2"]
+    }
+  }
+]
+
+If sharedMeal is true, both adultRecipe and kidsRecipe should be the SAME recipe (duplicate the object with targetAudience set appropriately).
+
+Ingredient categories must be one of: "produce", "protein", "dairy", "pantry", "frozen", "other"
+
+Return ONLY the JSON array, no other text.`
+      }
+    ]
+  });
+
+  const content = response.content[0];
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type');
+  }
+
+  let meals: GeneratedMeal[];
+  try {
+    meals = JSON.parse(content.text);
+  } catch {
+    const jsonMatch = content.text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      meals = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error('Failed to parse weekly meals');
+    }
+  }
+
+  // Ensure dates are correct from our input
+  return meals.map((meal, index) => ({
+    ...meal,
+    day: weekDates[index].day,
+    date: weekDates[index].date,
+  }));
+}
+
+export async function generateSingleMeal(
+  day: string,
+  targetAudience: 'adults' | 'kids',
+  excludeRecipeNames: string[]
+): Promise<RecipeSuggestion> {
+  const settings = await getSettings();
+  const contextPrompt = buildContextPrompt(
+    settings.aiContext,
+    settings.preferredCuisines,
+    settings.recipeWebsites,
+    settings.exclusions,
+    targetAudience
+  );
+
+  const excludeClause = excludeRecipeNames.length
+    ? `Do NOT suggest these recipes (already in the plan): ${excludeRecipeNames.join(', ')}`
+    : '';
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2048,
+    messages: [
+      {
+        role: 'user',
+        content: `Generate a replacement ${targetAudience === 'adults' ? 'adult' : 'kids'} dinner recipe for ${day}.
+
+${contextPrompt}
+
+${excludeClause}
+
+Requirements:
+- Easy to prepare (under 45 minutes)
+- Serves 4 people
+- Common ingredients available at most grocery stores
+${targetAudience === 'kids' ? '- Must be kid-friendly: familiar flavors, mild taste, appealing to children' : ''}
+
+Return a single recipe as JSON:
+{
+  "name": "Recipe Name",
+  "cuisine": "cuisine-type",
+  "prepTime": 30,
+  "servings": 4,
+  "kidFriendly": ${targetAudience === 'kids' ? 'true' : 'false'},
+  "targetAudience": "${targetAudience}",
+  "sourceWebsite": "optional-website.com",
+  "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
+  "instructions": ["Step 1", "Step 2"]
+}
+
+Ingredient categories must be one of: "produce", "protein", "dairy", "pantry", "frozen", "other"
+
+Return ONLY valid JSON, no other text.`
+      }
+    ]
+  });
+
+  const content = response.content[0];
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type');
+  }
+
+  try {
+    return JSON.parse(content.text);
+  } catch {
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Failed to parse meal suggestion');
+  }
 }

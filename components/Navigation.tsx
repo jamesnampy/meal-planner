@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
-  { href: '/recipes', label: 'Recipes' },
+  { href: '/recipes', label: 'Favorites' },
   { href: '/plan', label: 'Meal Plan' },
   { href: '/shopping-list', label: 'Shopping List' },
   { href: '/prep', label: 'Weekly Prep' },

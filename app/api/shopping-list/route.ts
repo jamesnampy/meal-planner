@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getCurrentPlan } from '@/lib/plans';
-import { getRecipes } from '@/lib/recipes';
 import { ShoppingItem, Recipe } from '@/types';
 
 export async function GET() {
-  const [plan, recipes] = await Promise.all([
-    getCurrentPlan(),
-    getRecipes(),
-  ]);
+  const plan = await getCurrentPlan();
 
   // Only include approved meals
   const approvedMeals = plan.meals.filter(m => m.approved);
@@ -20,6 +16,8 @@ export async function GET() {
   const ingredientMap = new Map<string, ShoppingItem>();
 
   const addIngredientsFromRecipe = (recipe: Recipe) => {
+    if (!recipe?.ingredients) return;
+
     for (const ingredient of recipe.ingredients) {
       const key = `${ingredient.name.toLowerCase()}-${ingredient.unit.toLowerCase()}`;
       const existing = ingredientMap.get(key);
@@ -46,24 +44,14 @@ export async function GET() {
   };
 
   for (const meal of approvedMeals) {
-    // Get adult recipe
-    const adultRecipeId = meal.adultRecipeId || meal.recipeId;
-    const adultRecipe = adultRecipeId ? recipes.find(r => r.id === adultRecipeId) : null;
-
-    // Get kids recipe (if different from adult)
-    const kidsRecipeId = meal.kidsRecipeId;
-    const kidsRecipe = kidsRecipeId && kidsRecipeId !== adultRecipeId
-      ? recipes.find(r => r.id === kidsRecipeId)
-      : null;
-
-    // Add ingredients from adult recipe
-    if (adultRecipe) {
-      addIngredientsFromRecipe(adultRecipe);
+    // Add ingredients from adult recipe (embedded directly in meal)
+    if (meal.adultRecipe) {
+      addIngredientsFromRecipe(meal.adultRecipe);
     }
 
-    // Add ingredients from kids recipe (if different)
-    if (kidsRecipe) {
-      addIngredientsFromRecipe(kidsRecipe);
+    // Add ingredients from kids recipe if different
+    if (meal.kidsRecipe && !meal.sharedMeal) {
+      addIngredientsFromRecipe(meal.kidsRecipe);
     }
   }
 

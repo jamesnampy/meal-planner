@@ -17,17 +17,16 @@ export interface Recipe {
   kidFriendly: boolean;
   targetAudience: 'adults' | 'kids' | 'both';
   sourceWebsite?: string;
+  savedToLibrary?: boolean;
 }
 
 export interface Meal {
   day: string;
   date: string;
-  adultRecipeId: string;
-  kidsRecipeId: string;
+  adultRecipe: Recipe;
+  kidsRecipe: Recipe;
   sharedMeal: boolean;
   approved: boolean;
-  // Legacy support for single-recipe plans
-  recipeId?: string;
 }
 
 export interface WeeklyPlan {

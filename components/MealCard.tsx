@@ -10,7 +10,6 @@ interface MealCardProps {
   targetAudience?: 'adults' | 'kids' | 'both';
   sharedMeal?: boolean;
   onApprove: () => void;
-  onRegenerate: () => void;
 }
 
 export default function MealCard({
@@ -21,7 +20,6 @@ export default function MealCard({
   targetAudience = 'both',
   sharedMeal = false,
   onApprove,
-  onRegenerate,
 }: MealCardProps) {
   if (!recipe) {
     return (
@@ -89,22 +87,16 @@ export default function MealCard({
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {!approved && (
+      {!approved && (
+        <div className="flex gap-2">
           <button
             onClick={onApprove}
             className="flex-1 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-md hover:bg-emerald-700 transition-colors"
           >
             Approve
           </button>
-        )}
-        <button
-          onClick={onRegenerate}
-          className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors"
-        >
-          {approved ? 'Change' : 'Different Recipe'}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

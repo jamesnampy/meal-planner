@@ -134,6 +134,7 @@ function NewRecipeForm() {
           ...recipe,
           ingredients: validIngredients,
           instructions: validInstructions,
+          targetAudience: recipe.kidFriendly ? 'both' : 'adults',
         }),
       });
 
@@ -212,7 +213,7 @@ function NewRecipeForm() {
       {selectedSuggestion && (
         <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
           <p className="text-green-800">
-            Recipe imported from AI. Review and edit below, then save.
+            Recipe imported from AI. Review and edit below, then save to your favorites.
           </p>
         </div>
       )}
@@ -394,7 +395,7 @@ function NewRecipeForm() {
             disabled={saving}
             className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
-            {saving ? 'Saving...' : 'Save Recipe'}
+            {saving ? 'Saving...' : 'Save to Favorites'}
           </button>
           <button
             type="button"

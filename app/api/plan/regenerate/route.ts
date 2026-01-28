@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateMealSuggestion } from '@/lib/claude';
-import { getCurrentPlan, replaceMeal } from '@/lib/plans';
-import { getRecipes, addRecipe } from '@/lib/recipes';
+import { regenerateMeal } from '@/lib/meal-generator';
+import { replaceMealRecipe } from '@/lib/plans';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,49 +10,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing day' }, { status: 400 });
     }
 
-    // Get current plan and recipes to know what to exclude
-    const [plan, recipes] = await Promise.all([
-      getCurrentPlan(),
-      getRecipes(),
-    ]);
+    // Generate new recipe via AI
+    const newRecipe = await regenerateMeal(day, targetAudience as 'adults' | 'kids');
 
-    // Get names of recipes already in the plan (both adult and kids)
-    const plannedRecipeNames = plan.meals
-      .flatMap(m => {
-        const adultRecipe = recipes.find(r => r.id === m.adultRecipeId);
-        const kidsRecipe = recipes.find(r => r.id === m.kidsRecipeId);
-        // Also check legacy recipeId
-        const legacyRecipe = m.recipeId ? recipes.find(r => r.id === m.recipeId) : null;
-        return [adultRecipe?.name, kidsRecipe?.name, legacyRecipe?.name];
-      })
-      .filter(Boolean) as string[];
-
-    // Get AI suggestion with target audience
-    const suggestion = await generateMealSuggestion(
-      targetAudience as 'adults' | 'kids' | 'both',
-      undefined,
-      plannedRecipeNames
-    );
-
-    // Add the new recipe to our collection
-    const newRecipe = await addRecipe({
-      name: suggestion.name,
-      cuisine: suggestion.cuisine,
-      prepTime: suggestion.prepTime,
-      servings: suggestion.servings,
-      ingredients: suggestion.ingredients,
-      instructions: suggestion.instructions,
-      kidFriendly: suggestion.kidFriendly,
-      isFavorite: false,
-      targetAudience: suggestion.targetAudience || targetAudience,
-      sourceWebsite: suggestion.sourceWebsite,
-    });
-
-    // Update the plan with the new recipe
-    const updatedPlan = await replaceMeal(
+    // Update the plan with the new embedded recipe
+    const updatedPlan = await replaceMealRecipe(
       day,
-      newRecipe.id,
-      targetAudience as 'adults' | 'kids' | 'both'
+      targetAudience as 'adults' | 'kids',
+      newRecipe
     );
 
     return NextResponse.json({
