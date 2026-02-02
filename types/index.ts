@@ -25,8 +25,15 @@ export interface Meal {
   date: string;
   adultRecipe: Recipe;
   kidsRecipe: Recipe;
+  /** @deprecated Always false. Kept for data compat. */
   sharedMeal: boolean;
   approved: boolean;
+}
+
+export interface NotRecommendedRecipe {
+  recipeName: string;
+  audience: 'adults' | 'kids';
+  addedAt: string;
 }
 
 export interface WeeklyPlan {
@@ -65,6 +72,7 @@ export interface Settings {
   preferredCuisines: CuisineId[];
   aiContext: AIContext;
   recipeWebsites: string[];
+  notRecommended: NotRecommendedRecipe[];
 }
 
 export type PrepTaskCategory =

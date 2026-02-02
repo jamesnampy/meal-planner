@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS: Settings = {
   preferredCuisines: ['indian-fusion', 'mediterranean'],
   aiContext: DEFAULT_AI_CONTEXT,
   recipeWebsites: [],
+  notRecommended: [],
 };
 
 export async function getSettings(): Promise<Settings> {

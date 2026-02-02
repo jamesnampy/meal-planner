@@ -7,12 +7,15 @@ import { WeeklyPlan, Recipe, Meal } from '@/types';
 interface MealCardProps {
   recipe: Recipe | null;
   audience: 'adults' | 'kids';
+  day: string;
   isRegenerating: boolean;
   onRegenerate: () => void;
   onToggleFavorite: () => void;
+  onNotRecommended: () => void;
 }
 
-function MealCard({ recipe, audience, isRegenerating, onRegenerate, onToggleFavorite }: MealCardProps) {
+function MealCard({ recipe, audience, day, isRegenerating, onRegenerate, onToggleFavorite, onNotRecommended }: MealCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const icon = audience === 'adults' ? '🧑' : '👶';
   const label = audience === 'adults' ? 'ADULT MEAL' : 'KIDS MEAL';
 
@@ -24,30 +27,41 @@ function MealCard({ recipe, audience, isRegenerating, onRegenerate, onToggleFavo
           <span className="text-sm font-semibold text-gray-600 uppercase tracking-wide">{label}</span>
         </div>
         {recipe && (
-          <button
-            onClick={onToggleFavorite}
-            className={`p-1.5 rounded-full transition-colors ${
-              recipe.isFavorite
-                ? 'text-red-500 bg-red-50 hover:bg-red-100'
-                : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-            }`}
-            title={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill={recipe.isFavorite ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              className="w-5 h-5"
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onNotRecommended}
+              className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-orange-500 hover:bg-orange-50"
+              title="Not recommended - replace and block this recipe"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-          </button>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17" />
+              </svg>
+            </button>
+            <button
+              onClick={onToggleFavorite}
+              className={`p-1.5 rounded-full transition-colors ${
+                recipe.isFavorite
+                  ? 'text-red-500 bg-red-50 hover:bg-red-100'
+                  : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+              }`}
+              title={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill={recipe.isFavorite ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                className="w-5 h-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 
@@ -65,12 +79,47 @@ function MealCard({ recipe, audience, isRegenerating, onRegenerate, onToggleFavo
               </>
             )}
           </div>
-          <div className="mt-3">
-            <p className="text-sm text-gray-600 line-clamp-2">
-              {recipe.ingredients.slice(0, 5).map(i => i.name).join(', ')}
-              {recipe.ingredients.length > 5 && ` +${recipe.ingredients.length - 5} more`}
-            </p>
-          </div>
+
+          {/* Collapsed: ingredient names summary */}
+          {!expanded && (
+            <div className="mt-3">
+              <p className="text-sm text-gray-600 line-clamp-2">
+                {recipe.ingredients.slice(0, 5).map(i => i.name).join(', ')}
+                {recipe.ingredients.length > 5 && ` +${recipe.ingredients.length - 5} more`}
+              </p>
+            </div>
+          )}
+
+          {/* Expanded: full recipe */}
+          {expanded && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Ingredients</h4>
+                <ul className="list-disc list-inside space-y-1">
+                  {recipe.ingredients.map((ing, idx) => (
+                    <li key={idx} className="text-sm text-gray-600">
+                      {ing.amount} {ing.unit} {ing.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Instructions</h4>
+                <ol className="list-decimal list-inside space-y-2">
+                  {recipe.instructions.map((step, idx) => (
+                    <li key={idx} className="text-sm text-gray-600">{step}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-3 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+          >
+            {expanded ? 'Hide Recipe' : 'View Recipe'}
+          </button>
         </div>
       ) : (
         <p className="text-gray-500 italic">Recipe not found</p>
@@ -92,6 +141,7 @@ function MealCard({ recipe, audience, isRegenerating, onRegenerate, onToggleFavo
 export default function PlanPage() {
   const router = useRouter();
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
+  const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [regeneratingDay, setRegeneratingDay] = useState<string | null>(null);
   const [regeneratingAudience, setRegeneratingAudience] = useState<'adults' | 'kids' | null>(null);
@@ -103,8 +153,10 @@ export default function PlanPage() {
   const fetchData = async () => {
     try {
       const res = await fetch('/api/plan');
-      const planData = await res.json();
+      const data = await res.json();
+      const { locked: isLocked, ...planData } = data;
       setPlan(planData);
+      setLocked(isLocked || false);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -119,8 +171,14 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ day, approved: true }),
       });
-      const updatedPlan = await res.json();
-      setPlan(updatedPlan);
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      const { locked: isLocked, ...planData } = data;
+      setPlan(planData);
+      setLocked(isLocked || false);
     } catch (error) {
       console.error('Failed to approve meal:', error);
     }
@@ -133,8 +191,14 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approveAll: true }),
       });
-      const updatedPlan = await res.json();
-      setPlan(updatedPlan);
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      const { locked: isLocked, ...planData } = data;
+      setPlan(planData);
+      setLocked(isLocked || false);
     } catch (error) {
       console.error('Failed to approve all:', error);
     }
@@ -171,32 +235,32 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ day, toggleFavorite: true, targetAudience }),
       });
-      const updatedPlan = await res.json();
-      setPlan(updatedPlan);
+      const data = await res.json();
+      const { locked: isLocked, ...planData } = data;
+      setPlan(planData);
+      setLocked(isLocked || false);
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
     }
   };
 
-  const handleToggleSharedMeal = async (day: string) => {
-    if (!plan) return;
-
-    const meal = plan.meals.find(m => m.day === day);
-    if (!meal) return;
-
+  const handleNotRecommended = async (day: string, audience: 'adults' | 'kids', recipeName: string) => {
+    if (!confirm(`Mark "${recipeName}" as not recommended? It will be replaced and blocked from future suggestions.`)) {
+      return;
+    }
     try {
-      const res = await fetch('/api/plan', {
-        method: 'PATCH',
+      const res = await fetch('/api/not-recommended', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          day,
-          sharedMeal: !meal.sharedMeal,
-        }),
+        body: JSON.stringify({ recipeName, audience, day }),
       });
-      const updatedPlan = await res.json();
-      setPlan(updatedPlan);
+      const data = await res.json();
+      if (data.plan) {
+        setPlan(data.plan);
+      }
     } catch (error) {
-      console.error('Failed to toggle shared meal:', error);
+      console.error('Failed to mark not recommended:', error);
+      alert('Failed to mark recipe as not recommended');
     }
   };
 
@@ -237,12 +301,21 @@ export default function PlanPage() {
         {unapprovedCount > 0 && (
           <button
             onClick={handleApproveAll}
-            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            disabled={locked}
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Approve All
           </button>
         )}
       </div>
+
+      {locked && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-amber-800 text-center">
+            Approval deadline has passed (Sunday 6 PM PT). A new plan will be generated Wednesday.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-6">
         {plan.meals.map((meal) => {
@@ -268,124 +341,38 @@ export default function PlanPage() {
                       Approved
                     </span>
                   )}
-                  {meal.sharedMeal && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
-                      Shared Meal
-                    </span>
-                  )}
                 </div>
                 {!meal.approved && (
                   <button
                     onClick={() => handleApprove(meal.day)}
-                    className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+                    disabled={locked}
+                    className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Approve Day
                   </button>
                 )}
               </div>
 
-              {/* Meal Cards */}
-              {meal.sharedMeal ? (
-                /* Single shared meal display */
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span>🧑👶</span>
-                      <span className="text-sm font-semibold text-blue-700 uppercase tracking-wide">SHARED MEAL (Adults & Kids)</span>
-                    </div>
-                    {meal.adultRecipe && (
-                      <button
-                        onClick={() => handleToggleFavorite(meal.day, 'adults')}
-                        className={`p-1.5 rounded-full transition-colors ${
-                          meal.adultRecipe.isFavorite
-                            ? 'text-red-500 bg-red-50 hover:bg-red-100'
-                            : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-                        }`}
-                        title={meal.adultRecipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill={meal.adultRecipe.isFavorite ? 'currentColor' : 'none'}
-                          stroke="currentColor"
-                          className="w-5 h-5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                  {meal.adultRecipe ? (
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-800">{meal.adultRecipe.name}</h3>
-                      <div className="flex flex-wrap gap-2 mt-1 text-sm text-gray-600">
-                        <span className="capitalize">{meal.adultRecipe.cuisine}</span>
-                        <span>•</span>
-                        <span>{meal.adultRecipe.prepTime} min</span>
-                        <span>•</span>
-                        <span>{meal.adultRecipe.servings} servings</span>
-                        {meal.adultRecipe.sourceWebsite && (
-                          <>
-                            <span>•</span>
-                            <span className="text-blue-600">{meal.adultRecipe.sourceWebsite}</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="mt-3">
-                        <p className="text-sm text-gray-600">
-                          {meal.adultRecipe.ingredients.map(i => `${i.amount} ${i.unit} ${i.name}`).join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 italic">Recipe not found</p>
-                  )}
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={() => handleRegenerateWithAI(meal.day, 'adults')}
-                      disabled={isRegeneratingAdult}
-                      className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      {isRegeneratingAdult ? 'Generating...' : 'AI Suggest'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Separate adult and kids meals */
-                <div className="grid md:grid-cols-2 gap-4">
-                  <MealCard
-                    recipe={meal.adultRecipe}
-                    audience="adults"
-                    isRegenerating={isRegeneratingAdult}
-                    onRegenerate={() => handleRegenerateWithAI(meal.day, 'adults')}
-                    onToggleFavorite={() => handleToggleFavorite(meal.day, 'adults')}
-                  />
-                  <MealCard
-                    recipe={meal.kidsRecipe}
-                    audience="kids"
-                    isRegenerating={isRegeneratingKids}
-                    onRegenerate={() => handleRegenerateWithAI(meal.day, 'kids')}
-                    onToggleFavorite={() => handleToggleFavorite(meal.day, 'kids')}
-                  />
-                </div>
-              )}
-
-              {/* Toggle shared meal */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={meal.sharedMeal}
-                    onChange={() => handleToggleSharedMeal(meal.day)}
-                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                  />
-                  <span className="text-sm text-gray-600">Use same meal for both adults and kids</span>
-                </label>
+              {/* Meal Cards - always separate */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <MealCard
+                  recipe={meal.adultRecipe}
+                  audience="adults"
+                  day={meal.day}
+                  isRegenerating={isRegeneratingAdult}
+                  onRegenerate={() => handleRegenerateWithAI(meal.day, 'adults')}
+                  onToggleFavorite={() => handleToggleFavorite(meal.day, 'adults')}
+                  onNotRecommended={() => meal.adultRecipe && handleNotRecommended(meal.day, 'adults', meal.adultRecipe.name)}
+                />
+                <MealCard
+                  recipe={meal.kidsRecipe}
+                  audience="kids"
+                  day={meal.day}
+                  isRegenerating={isRegeneratingKids}
+                  onRegenerate={() => handleRegenerateWithAI(meal.day, 'kids')}
+                  onToggleFavorite={() => handleToggleFavorite(meal.day, 'kids')}
+                  onNotRecommended={() => meal.kidsRecipe && handleNotRecommended(meal.day, 'kids', meal.kidsRecipe.name)}
+                />
               </div>
             </div>
           );

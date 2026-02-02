@@ -8,7 +8,6 @@ interface MealCardProps {
   recipe: Recipe | null;
   approved: boolean;
   targetAudience?: 'adults' | 'kids' | 'both';
-  sharedMeal?: boolean;
   onApprove: () => void;
 }
 
@@ -18,7 +17,6 @@ export default function MealCard({
   recipe,
   approved,
   targetAudience = 'both',
-  sharedMeal = false,
   onApprove,
 }: MealCardProps) {
   if (!recipe) {
@@ -47,11 +45,6 @@ export default function MealCard({
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-gray-800">{day}</h3>
-          {sharedMeal && (
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-              Shared
-            </span>
-          )}
         </div>
         <span className="text-sm text-gray-500">{date}</span>
       </div>

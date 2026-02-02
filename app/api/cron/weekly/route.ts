@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateWeeklyPlan } from '@/lib/meal-generator';
+import { isNtfyConfigured, sendPlanReadyNotification } from '@/lib/notify';
 
 export async function GET(request: NextRequest) {
   // Verify the request is from Vercel Cron
@@ -14,9 +15,16 @@ export async function GET(request: NextRequest) {
   try {
     const plan = await generateWeeklyPlan();
 
-    // Here you could add notifications (SMS, email, etc.)
-    // For now, just log and return the plan
     console.log('Weekly plan generated:', plan.weekStart);
+
+    // Send push notification if ntfy is configured
+    if (isNtfyConfigured()) {
+      try {
+        await sendPlanReadyNotification(plan.weekStart, plan.meals.length);
+      } catch (notifyError) {
+        console.error('Failed to send ntfy notification:', notifyError);
+      }
+    }
 
     return NextResponse.json({
       success: true,

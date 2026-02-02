@@ -37,39 +37,10 @@ export async function replaceMealRecipe(
   if (meal) {
     if (targetAudience === 'adults') {
       meal.adultRecipe = newRecipe;
-      // If it was a shared meal, now it's not (unless recipes are same)
-      if (meal.sharedMeal && meal.kidsRecipe.id !== newRecipe.id) {
-        meal.sharedMeal = false;
-      }
     } else {
       meal.kidsRecipe = newRecipe;
-      // If it was a shared meal, now it's not
-      if (meal.sharedMeal && meal.adultRecipe.id !== newRecipe.id) {
-        meal.sharedMeal = false;
-      }
     }
     meal.approved = false;
-  }
-  await savePlan(plan);
-  return plan;
-}
-
-export async function updateMealSharedStatus(
-  day: string,
-  sharedMeal: boolean
-): Promise<WeeklyPlan> {
-  const plan = await getCurrentPlan();
-  const meal = plan.meals.find(m => m.day === day);
-  if (meal) {
-    meal.sharedMeal = sharedMeal;
-    if (sharedMeal) {
-      // Copy adult recipe to kids
-      meal.kidsRecipe = {
-        ...meal.adultRecipe,
-        id: meal.adultRecipe.id + '-kids',
-        targetAudience: 'kids',
-      };
-    }
   }
   await savePlan(plan);
   return plan;

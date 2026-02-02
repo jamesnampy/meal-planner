@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, AVAILABLE_CUISINES, CuisineId } from '@/types';
+import { Settings, AVAILABLE_CUISINES, CuisineId, NotRecommendedRecipe } from '@/types';
 
 const DEFAULT_EXCLUSIONS = ['beef', 'pork', 'shellfish'];
 
@@ -14,10 +14,12 @@ const DEFAULT_SETTINGS: Settings = {
     generalNotes: '',
   },
   recipeWebsites: [],
+  notRecommended: [],
 };
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [notRecommended, setNotRecommended] = useState<NotRecommendedRecipe[]>([]);
   const [newExclusion, setNewExclusion] = useState('');
   const [newWebsite, setNewWebsite] = useState('');
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetchNotRecommended();
   }, []);
 
   const fetchSettings = async () => {
@@ -38,6 +41,33 @@ export default function SettingsPage() {
       setSettings(DEFAULT_SETTINGS);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchNotRecommended = async () => {
+    try {
+      const res = await fetch('/api/not-recommended');
+      const data = await res.json();
+      setNotRecommended(data);
+    } catch (error) {
+      console.error('Failed to fetch not-recommended:', error);
+    }
+  };
+
+  const handleRemoveNotRecommended = async (recipeName: string, audience: 'adults' | 'kids') => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/not-recommended', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeName, audience }),
+      });
+      const data = await res.json();
+      setNotRecommended(data.list);
+    } catch (error) {
+      console.error('Failed to remove not-recommended:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -375,6 +405,41 @@ export default function SettingsPage() {
           {settings.recipeWebsites.length === 0 && (
             <p className="text-gray-500 italic py-2 text-sm">
               No websites added. Suggestions: seriouseats.com, budgetbytes.com, indianhealthyrecipes.com, skinnytaste.com
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Not Recommended Recipes */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Not Recommended Recipes</h2>
+        <p className="text-gray-600 mb-4 text-sm">
+          Recipes marked as not recommended will be excluded from future AI suggestions.
+        </p>
+
+        <div className="space-y-2">
+          {notRecommended.map((item) => (
+            <div
+              key={`${item.recipeName}-${item.audience}`}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+            >
+              <div>
+                <span className="text-gray-800">{item.recipeName}</span>
+                <span className="ml-2 text-xs text-gray-500 capitalize">({item.audience})</span>
+              </div>
+              <button
+                onClick={() => handleRemoveNotRecommended(item.recipeName, item.audience)}
+                disabled={saving}
+                className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+
+          {notRecommended.length === 0 && (
+            <p className="text-gray-500 italic py-2 text-sm">
+              No recipes blocked. Mark recipes as &quot;not recommended&quot; from the meal plan page.
             </p>
           )}
         </div>

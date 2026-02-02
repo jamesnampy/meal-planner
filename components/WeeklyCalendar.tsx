@@ -32,7 +32,6 @@ export default function WeeklyCalendar({
           date={meal.date}
           recipe={meal.adultRecipe}
           approved={meal.approved}
-          sharedMeal={meal.sharedMeal}
           onApprove={() => onApprove(meal.day)}
         />
       ))}

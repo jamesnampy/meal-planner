@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES, PrepTask, PrepTaskCategory, PrepDay, Recipe } from '@/types';
+import { Ingredient, AIContext, CuisineId, AVAILABLE_CUISINES, PrepTask, PrepTaskCategory, PrepDay, Recipe, NotRecommendedRecipe } from '@/types';
 import { getSettings } from './settings';
 
 const anthropic = new Anthropic();
@@ -19,7 +19,6 @@ interface RecipeSuggestion {
 interface DualMealSuggestion {
   adultMeal: RecipeSuggestion;
   kidsMeal: RecipeSuggestion;
-  sharedMeal: boolean;
 }
 
 function getCuisineLabels(cuisineIds: CuisineId[]): string {
@@ -33,7 +32,8 @@ function buildContextPrompt(
   preferredCuisines: CuisineId[],
   recipeWebsites: string[],
   exclusions: string[],
-  targetAudience?: 'adults' | 'kids' | 'both'
+  targetAudience?: 'adults' | 'kids' | 'both',
+  notRecommended?: NotRecommendedRecipe[]
 ): string {
   const sections: string[] = [];
 
@@ -66,6 +66,19 @@ ${recipeWebsites.join(', ')}`);
 ${exclusions.join(', ')}`);
   }
 
+  if (notRecommended && notRecommended.length > 0) {
+    const adultBlocked = notRecommended.filter(r => r.audience === 'adults').map(r => r.recipeName);
+    const kidsBlocked = notRecommended.filter(r => r.audience === 'kids').map(r => r.recipeName);
+    const lines: string[] = ['NOT RECOMMENDED RECIPES (do NOT suggest these or very similar ones):'];
+    if (adultBlocked.length > 0) {
+      lines.push(`- Adults: ${adultBlocked.join(', ')}`);
+    }
+    if (kidsBlocked.length > 0) {
+      lines.push(`- Kids: ${kidsBlocked.join(', ')}`);
+    }
+    sections.push(lines.join('\n'));
+  }
+
   if (targetAudience) {
     const audienceGuidance = targetAudience === 'adults'
       ? 'Focus on flavor complexity and health goals from preferred cuisines.'
@@ -89,7 +102,8 @@ export async function searchRecipes(
     settings.preferredCuisines,
     settings.recipeWebsites,
     settings.exclusions,
-    targetAudience
+    targetAudience,
+    settings.notRecommended
   );
 
   const response = await anthropic.messages.create({
@@ -152,7 +166,8 @@ export async function generateMealSuggestion(
     settings.preferredCuisines,
     settings.recipeWebsites,
     settings.exclusions,
-    targetAudience
+    targetAudience,
+    settings.notRecommended
   );
 
   const excludeClause = excludeRecipeNames?.length
@@ -222,7 +237,9 @@ export async function generateDualMealSuggestion(
     settings.aiContext,
     settings.preferredCuisines,
     settings.recipeWebsites,
-    settings.exclusions
+    settings.exclusions,
+    undefined,
+    settings.notRecommended
   );
 
   const excludeClause = excludeRecipeNames?.length
@@ -244,7 +261,7 @@ ${contextPrompt}
 OPTIMIZATION GOALS:
 - Minimize total prep time
 - Share ingredients where possible
-- If a recipe works well for both adults AND kids, you may suggest the same recipe for both (set sharedMeal: true)
+- Always generate SEPARATE and DISTINCT recipes for adults and kids. Never suggest the same recipe for both.
 
 ${excludeClause}
 
@@ -271,11 +288,8 @@ Return a JSON object with this structure:
     "sourceWebsite": "optional-website.com",
     "ingredients": [{"name": "...", "amount": "1", "unit": "lb", "category": "protein"}],
     "instructions": ["Step 1", "Step 2"]
-  },
-  "sharedMeal": false
+  }
 }
-
-If sharedMeal is true, both adultMeal and kidsMeal should be the same recipe (duplicate the recipe object).
 
 Return ONLY valid JSON, no other text.`
       }
@@ -309,7 +323,6 @@ export interface GeneratedMeal {
   date: string;
   adultRecipe: RecipeSuggestion;
   kidsRecipe: RecipeSuggestion;
-  sharedMeal: boolean;
 }
 
 export async function generatePrepTasks(meals: MealWithDay[]): Promise<PrepTask[]> {
@@ -425,7 +438,9 @@ export async function generateWeeklyMeals(
     settings.aiContext,
     settings.preferredCuisines,
     settings.recipeWebsites,
-    settings.exclusions
+    settings.exclusions,
+    undefined,
+    settings.notRecommended
   );
 
   const daysDescription = weekDates
@@ -452,7 +467,7 @@ IMPORTANT GUIDELINES:
 - Ensure variety across the week (different proteins, cuisines, cooking methods)
 - Don't repeat the same main protein on consecutive days
 - Balance cuisines throughout the week
-- If a recipe works well for both adults AND kids, you may use the same recipe for both (set sharedMeal: true)
+- Always generate SEPARATE and DISTINCT recipes for adults and kids.
 - Keep prep times under 45 minutes for weeknight cooking
 - Use common ingredients available at most grocery stores
 
@@ -461,7 +476,6 @@ Return a JSON array with this structure:
   {
     "day": "Monday",
     "date": "2024-01-15",
-    "sharedMeal": false,
     "adultRecipe": {
       "name": "Recipe Name",
       "cuisine": "cuisine-type",
@@ -486,8 +500,6 @@ Return a JSON array with this structure:
     }
   }
 ]
-
-If sharedMeal is true, both adultRecipe and kidsRecipe should be the SAME recipe (duplicate the object with targetAudience set appropriately).
 
 Ingredient categories must be one of: "produce", "protein", "dairy", "pantry", "frozen", "other"
 
@@ -532,7 +544,8 @@ export async function generateSingleMeal(
     settings.preferredCuisines,
     settings.recipeWebsites,
     settings.exclusions,
-    targetAudience
+    targetAudience,
+    settings.notRecommended
   );
 
   const excludeClause = excludeRecipeNames.length

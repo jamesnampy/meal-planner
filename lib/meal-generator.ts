@@ -22,22 +22,19 @@ export async function generateWeeklyPlan(weekStart?: Date): Promise<WeeklyPlan> 
       savedToLibrary: false,
     };
 
-    // For shared meals, use the same recipe for kids
-    const kidsRecipe: Recipe = gm.sharedMeal
-      ? { ...adultRecipe, targetAudience: 'kids' as const }
-      : {
-          id: generateRecipeId(),
-          ...gm.kidsRecipe,
-          isFavorite: false,
-          savedToLibrary: false,
-        };
+    const kidsRecipe: Recipe = {
+      id: generateRecipeId(),
+      ...gm.kidsRecipe,
+      isFavorite: false,
+      savedToLibrary: false,
+    };
 
     return {
       day: gm.day,
       date: gm.date,
       adultRecipe,
       kidsRecipe,
-      sharedMeal: gm.sharedMeal,
+      sharedMeal: false,
       approved: false,
     };
   });
