@@ -23,7 +23,8 @@ export default function Dashboard() {
       ]);
       const planData = await planRes.json();
       const favoritesData = await favoritesRes.json();
-      setPlan(planData);
+      const { locked, ...planOnly } = planData;
+      setPlan(planOnly);
       setFavorites(favoritesData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
