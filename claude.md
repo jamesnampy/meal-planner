@@ -13,10 +13,14 @@ npm install
 ```
 
 ### Environment Setup
-Create a `.env.local` file with:
+Create a `.env.local` file with (see `.env.example` for full list):
 ```
 ANTHROPIC_API_KEY=sk-ant-xxxxx
 CRON_SECRET=your-random-secret-here
+AUTH_SECRET=generate-a-random-32-char-string
+ADMIN_PASSWORD=your-family-password
+MONGODB_URI=mongodb+srv://...
+NTFY_TOPIC=meal-planner-sdfui901  # optional, for push notifications
 ```
 
 ### Running Locally
@@ -31,9 +35,14 @@ Open http://localhost:3000
 3. Add environment variables in Vercel dashboard:
    - `ANTHROPIC_API_KEY`: Your Anthropic API key
    - `CRON_SECRET`: Random string for cron job authentication
+   - `AUTH_SECRET`: Random 32-char string for NextAuth.js JWT
+   - `ADMIN_PASSWORD`: Family login password
+   - `MONGODB_URI`: MongoDB Atlas connection string
+   - `NTFY_TOPIC`: (optional) ntfy.sh topic for push notifications
 4. Deploy
 
-The weekly cron job runs every Wednesday at 9 AM UTC.
+The weekly cron job runs every Wednesday at 6 PM PST (Thursday 2 AM UTC).
+An approval reminder cron runs Thursday & Friday at 6 PM PST.
 
 ---
 
@@ -60,24 +69,11 @@ The app uses `claude-sonnet-4-20250514` for recipe generation.
 
 ## New Features Implementation Plan
 
-### Feature 1: Security Login (Bot Protection)
+### Feature 1: Security Login (Bot Protection) ✅ IMPLEMENTED
 
 **Purpose**: Prevent unauthorized bot usage and protect API costs.
 
-**Implementation Approach**: NextAuth.js with simple password protection
-
-**Files to Create/Modify**:
-- `lib/auth.ts` - NextAuth configuration
-- `app/api/auth/[...nextauth]/route.ts` - Auth API route
-- `app/login/page.tsx` - Login page
-- `middleware.ts` - Protect all routes except login
-- `.env.local` - Add AUTH_SECRET and ADMIN_PASSWORD
-
-**Environment Variables**:
-```
-AUTH_SECRET=random-secret-for-jwt
-ADMIN_PASSWORD=your-chosen-password
-```
+**Implementation**: NextAuth.js with simple password protection.
 
 **Flow**:
 1. User visits any page → redirected to /login if not authenticated
@@ -85,40 +81,27 @@ ADMIN_PASSWORD=your-chosen-password
 3. Session created with JWT → user can access app
 4. Sessions expire after 7 days
 
+**Files**:
+- `lib/auth.ts` - NextAuth configuration
+- `app/api/auth/[...nextauth]/route.ts` - Auth API route
+- `app/login/page.tsx` - Login page
+- `middleware.ts` - Protects all routes except login and `/api/cron/*`
+
 ---
 
-### Feature 2: Recipe Exclusion List
+### Feature 2: Recipe Exclusion List ✅ IMPLEMENTED
 
 **Purpose**: Allow users to exclude certain ingredients (dietary restrictions, allergies, preferences).
 
 **Default Exclusions**: beef, pork, shellfish
 
-**Implementation Approach**:
-- Store exclusions in `data/settings.json`
-- Settings page to manage exclusions
-- Pass exclusions to Claude in all recipe prompts
+**Implementation**: Exclusions stored in MongoDB settings, passed to Claude in all recipe prompts.
 
-**Files to Create/Modify**:
-- `data/settings.json` - Store user preferences including exclusions
-- `types/index.ts` - Add Settings type
-- `lib/settings.ts` - Read/write settings
-- `app/settings/page.tsx` - Settings page UI
+**Files**:
+- `lib/settings.ts` - Read/write settings with exclusions
+- `app/settings/page.tsx` - Settings page UI for managing exclusions
 - `app/api/settings/route.ts` - Settings API
-- `lib/claude.ts` - Update prompts to include exclusions
-- `components/Navigation.tsx` - Add Settings link
-
-**Data Format** (`data/settings.json`):
-```json
-{
-  "exclusions": ["beef", "pork", "shellfish"],
-  "customExclusions": []
-}
-```
-
-**Claude Prompt Update**:
-```
-IMPORTANT: Do NOT include recipes containing these ingredients: beef, pork, shellfish, [user additions]
-```
+- `lib/claude.ts` - Prompts include exclusion list
 
 ---
 
@@ -286,18 +269,16 @@ Analyze the week's meals to identify:
 ### 7. Weekly Schedule
 
 #### 7.1 Cron Schedule
-- **Frequency**: Weekly, every Wednesday
-- **Cron expression**: `0 0 * * 3` (runs at midnight on Wednesdays)
-- **Purpose**: Automatically generate the upcoming week's meal plan draft
+- **Weekly plan generation**: `0 2 * * 4` (Wednesday 6 PM PST = Thursday 2 AM UTC)
+- **Approval reminders**: `0 2 * * 5,6` (Thursday & Friday 6 PM PST = Friday & Saturday 2 AM UTC)
+- **Purpose**: Auto-generate weekly plan and send reminders before Sunday 6 PM PT lockdown
 
-#### 7.2 Text Message Notification
-- Send SMS notification when weekly plan is ready for review
-- **Message content**:
-  - Notification that new meal plan is available
-  - Link to review/approve the plan
-  - Quick summary (e.g., "5 dinners planned for next week")
-- **Trigger**: After cron job generates the weekly plan
-- **Recipient**: Primary family meal planner
+#### 7.2 Push Notifications (ntfy.sh)
+- Push notifications via ntfy.sh (no SDK needed, plain HTTP POST)
+- **Plan ready notification**: Sent after weekly cron generates the plan
+- **Approval reminder**: Sent Thu/Fri if unapproved meals remain
+- **Configuration**: Set `NTFY_TOPIC` env var, subscribe to the topic in ntfy app
+- **Click action**: Opens meal planner app at `/plan`
 
 ## Technical Considerations
 
@@ -494,3 +475,137 @@ Analyze the week's meals to identify:
 
 **Future Enhancements**:
 - Send prep reminder notification on Saturday morning
+
+---
+
+### Always Split Meals ✅ IMPLEMENTED
+
+**Purpose**: Always generate separate adult and kids meals. No more shared meal option.
+
+**What Changed**:
+- Removed `sharedMeal` toggle, badge, and conditional rendering from plan UI
+- Claude prompts now explicitly request separate and distinct recipes for adults and kids
+- `sharedMeal` field kept on `Meal` type for backward data compatibility (always `false`)
+- Removed `updateMealSharedStatus` function from `lib/plans.ts`
+- Simplified `replaceMealRecipe` to remove shared meal check logic
+
+**Files Modified**:
+- `types/index.ts` - Deprecated `sharedMeal` field
+- `lib/claude.ts` - Removed sharedMeal from interfaces and prompts
+- `lib/meal-generator.ts` - Always creates separate kids recipe with own ID
+- `lib/plans.ts` - Removed `updateMealSharedStatus`, simplified `replaceMealRecipe`
+- `app/api/plan/route.ts` - Removed shared meal handler
+- `app/plan/page.tsx` - Removed shared meal UI (toggle, badge, conditional rendering)
+- `components/MealCard.tsx` - Removed `sharedMeal` prop and "Shared" badge
+
+---
+
+### "Not Recommended" Recipe System ✅ IMPLEMENTED
+
+**Purpose**: Allow users to mark recipes they don't want to see again, with per-audience tracking.
+
+**How It Works**:
+1. Click thumbs-down button next to any recipe in the plan
+2. Confirm dialog asks to block the recipe
+3. Recipe is added to not-recommended list for that audience (adults/kids)
+4. If a day is specified, that meal is immediately regenerated
+5. Claude prompts include the not-recommended list to avoid suggesting blocked recipes
+
+**Data Format** (`NotRecommendedRecipe`):
+```json
+{
+  "recipeName": "Spaghetti Bolognese",
+  "audience": "kids",
+  "addedAt": "2026-02-01T00:00:00.000Z"
+}
+```
+
+**Files Created**:
+- `lib/not-recommended.ts` - CRUD operations for not-recommended list
+- `app/api/not-recommended/route.ts` - GET/POST/DELETE API endpoints
+
+**Files Modified**:
+- `types/index.ts` - Added `NotRecommendedRecipe` interface, added to `Settings`
+- `lib/settings.ts` - Added `notRecommended: []` to defaults
+- `lib/claude.ts` - `buildContextPrompt()` includes not-recommended list in prompts
+- `app/plan/page.tsx` - Thumbs-down button on each meal card
+- `app/settings/page.tsx` - "Not Recommended Recipes" management section
+
+---
+
+### Full Recipe Display ✅ IMPLEMENTED
+
+**Purpose**: Allow users to view full recipe details (ingredients and instructions) inline in the plan view.
+
+**How It Works**:
+- Each meal card has a "View Recipe" / "Hide Recipe" toggle button
+- Expanded view shows full ingredients list (amount + unit + name) and numbered instructions
+- Collapsed view shows ingredient name summary (first 5)
+
+**Files Modified**:
+- `app/plan/page.tsx` - Added `expanded` state and recipe detail rendering to inline MealCard
+
+---
+
+### Sunday 6 PM PT Plan Lockdown ✅ IMPLEMENTED
+
+**Purpose**: Enforce a weekly deadline for meal plan approval to ensure grocery shopping can happen on time.
+
+**How It Works**:
+- Lockdown time: Sunday 6 PM PST (= Monday 2 AM UTC, calculated as `weekStart + 7 days, 2:00 AM UTC`)
+- After lockdown: Approve Day and Approve All buttons are disabled
+- Banner displayed: "Approval deadline has passed (Sunday 6 PM). A new plan will be generated Wednesday."
+- AI Suggest, Not Recommended, and Favorite buttons remain active (affect future plans)
+- Already-approved plans are not affected by the lock
+- Server computes `locked` field and returns it in GET `/api/plan` response
+
+**Files Created**:
+- `lib/plan-lock.ts` - `isPlanLocked(plan)` function
+
+**Files Modified**:
+- `app/api/plan/route.ts` - Returns 403 on approval actions when locked; adds `locked` to GET response
+- `app/plan/page.tsx` - Disables approve buttons and shows banner when locked
+
+---
+
+### Ntfy.sh Push Notifications ✅ IMPLEMENTED
+
+**Purpose**: Send push notifications when the weekly plan is ready and when approval reminders are due.
+
+**Configuration**:
+- Set `NTFY_TOPIC` env var (e.g., `meal-planner-sdfui901`)
+- Subscribe to the topic in the ntfy mobile app or web client
+- Notifications are optional; skipped gracefully if `NTFY_TOPIC` is not set
+
+**Notifications Sent**:
+1. **Plan Ready** (after weekly cron): "Your weekly meal plan is ready! X meals to review."
+2. **Approval Reminder** (Thu/Fri cron): "You have X unapproved meals for week of Y. Deadline: Sunday 6 PM PT."
+
+**Click Action**: Tapping notification opens `https://meal-planner.jamesvibecode.com/plan`
+
+**Files Created**:
+- `lib/notify.ts` - `sendNotification()`, `sendPlanReadyNotification()`, `sendApprovalReminder()`
+
+**Files Modified**:
+- `app/api/cron/weekly/route.ts` - Sends plan ready notification after generation
+- `vercel.json` - Updated cron to `0 2 * * 4` (Wed 6 PM PST)
+- `.env.example` - Added `NTFY_TOPIC`
+
+---
+
+### Approval Reminder Cron ✅ IMPLEMENTED
+
+**Purpose**: Remind users to approve their meal plan before the Sunday 6 PM PT deadline.
+
+**Schedule**: Thursday & Friday at 6 PM PST (`0 2 * * 5,6` UTC)
+
+**Logic**:
+- Skips if no plan, no meals, plan already approved, all meals individually approved, or plan is locked
+- Counts unapproved meals and sends reminder via ntfy
+- Gracefully skips if ntfy is not configured
+
+**Files Created**:
+- `app/api/cron/reminder/route.ts` - Reminder cron endpoint (auth via `CRON_SECRET`)
+
+**Files Modified**:
+- `vercel.json` - Added reminder cron entry (2 total cron jobs, Hobby plan compatible)
