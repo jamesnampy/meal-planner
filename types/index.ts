@@ -69,9 +69,16 @@ export type CuisineId = typeof AVAILABLE_CUISINES[number]['id'];
 
 export interface Settings {
   exclusions: string[];
+  /** @deprecated Use adultCuisines/kidsCuisines instead. Kept for backward compat. */
   preferredCuisines: CuisineId[];
+  adultCuisines: CuisineId[];
+  kidsCuisines: CuisineId[];
+  vegetarianDaysPerWeek: number;
   aiContext: AIContext;
+  /** @deprecated Use adultRecipeWebsites/kidsRecipeWebsites instead. Kept for backward compat. */
   recipeWebsites: string[];
+  adultRecipeWebsites: string[];
+  kidsRecipeWebsites: string[];
   notRecommended: NotRecommendedRecipe[];
 }
 

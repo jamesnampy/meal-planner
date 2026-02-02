@@ -8,6 +8,11 @@ import {
   removeRecipeWebsite,
   updateAiContext,
   setPreferredCuisines,
+  setAdultCuisines,
+  setKidsCuisines,
+  setVegetarianDaysPerWeek,
+  setAdultRecipeWebsites,
+  setKidsRecipeWebsites,
 } from '@/lib/settings';
 
 export async function GET() {
@@ -24,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(settings);
   }
 
-  // Handle recipe website addition
+  // Handle recipe website addition (legacy)
   if (body.recipeWebsite && typeof body.recipeWebsite === 'string') {
     const settings = await addRecipeWebsite(body.recipeWebsite);
     return NextResponse.json(settings);
@@ -66,9 +71,39 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(settings);
   }
 
-  // Handle preferred cuisines update
+  // Handle preferred cuisines update (legacy)
   if (body.preferredCuisines) {
     const settings = await setPreferredCuisines(body.preferredCuisines);
+    return NextResponse.json(settings);
+  }
+
+  // Handle adult cuisines update
+  if (body.adultCuisines) {
+    const settings = await setAdultCuisines(body.adultCuisines);
+    return NextResponse.json(settings);
+  }
+
+  // Handle kids cuisines update
+  if (body.kidsCuisines) {
+    const settings = await setKidsCuisines(body.kidsCuisines);
+    return NextResponse.json(settings);
+  }
+
+  // Handle vegetarian days update
+  if (body.vegetarianDaysPerWeek !== undefined) {
+    const settings = await setVegetarianDaysPerWeek(body.vegetarianDaysPerWeek);
+    return NextResponse.json(settings);
+  }
+
+  // Handle adult recipe websites update
+  if (body.adultRecipeWebsites) {
+    const settings = await setAdultRecipeWebsites(body.adultRecipeWebsites);
+    return NextResponse.json(settings);
+  }
+
+  // Handle kids recipe websites update
+  if (body.kidsRecipeWebsites) {
+    const settings = await setKidsRecipeWebsites(body.kidsRecipeWebsites);
     return NextResponse.json(settings);
   }
 

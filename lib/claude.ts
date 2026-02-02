@@ -29,17 +29,68 @@ function getCuisineLabels(cuisineIds: CuisineId[]): string {
 
 function buildContextPrompt(
   aiContext: AIContext,
-  preferredCuisines: CuisineId[],
-  recipeWebsites: string[],
+  adultCuisines: CuisineId[],
+  kidsCuisines: CuisineId[],
+  adultRecipeWebsites: string[],
+  kidsRecipeWebsites: string[],
   exclusions: string[],
   targetAudience?: 'adults' | 'kids' | 'both',
-  notRecommended?: NotRecommendedRecipe[]
+  notRecommended?: NotRecommendedRecipe[],
+  vegetarianDaysPerWeek?: number,
 ): string {
   const sections: string[] = [];
 
-  if (preferredCuisines.length > 0) {
-    sections.push(`PREFERRED CUISINES (prioritize these):
-${getCuisineLabels(preferredCuisines)}`);
+  // Audience-specific cuisine preferences with priority ordering
+  if (targetAudience === 'adults' && adultCuisines.length > 0) {
+    sections.push(`PREFERRED CUISINES (prioritize these for adult meals, in order of preference):
+${adultCuisines.map((id, i) => `${i + 1}. ${getCuisineLabels([id])}`).join('\n')}`);
+  } else if (targetAudience === 'kids' && kidsCuisines.length > 0) {
+    sections.push(`PREFERRED CUISINES (prioritize these for kids meals, in order of preference):
+${kidsCuisines.map((id, i) => `${i + 1}. ${getCuisineLabels([id])}`).join('\n')}`);
+  } else {
+    if (adultCuisines.length > 0) {
+      sections.push(`ADULT CUISINE PREFERENCES (in order of priority):
+${adultCuisines.map((id, i) => `${i + 1}. ${getCuisineLabels([id])}`).join('\n')}`);
+    }
+    if (kidsCuisines.length > 0) {
+      sections.push(`KIDS CUISINE PREFERENCES (in order of priority):
+${kidsCuisines.map((id, i) => `${i + 1}. ${getCuisineLabels([id])}`).join('\n')}`);
+    }
+  }
+
+  // Audience-specific recipe websites
+  if (targetAudience === 'adults' && adultRecipeWebsites.length > 0) {
+    sections.push(`RECIPE SOURCES (MANDATORY - you MUST use recipes from ALL of these websites, distributing evenly):
+${adultRecipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}
+Each recipe MUST have a sourceWebsite field set to one of the above websites. Rotate through all sources.`);
+  } else if (targetAudience === 'kids' && kidsRecipeWebsites.length > 0) {
+    sections.push(`RECIPE SOURCES (MANDATORY - you MUST use recipes from ALL of these websites, distributing evenly):
+${kidsRecipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}
+Each recipe MUST have a sourceWebsite field set to one of the above websites. Rotate through all sources.`);
+  } else {
+    if (adultRecipeWebsites.length > 0) {
+      sections.push(`ADULT RECIPE SOURCES (MANDATORY - distribute adult recipes across ALL of these):
+${adultRecipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}`);
+    }
+    if (kidsRecipeWebsites.length > 0) {
+      sections.push(`KIDS RECIPE SOURCES (MANDATORY - distribute kids recipes across ALL of these):
+${kidsRecipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}`);
+    }
+    if (adultRecipeWebsites.length > 0 || kidsRecipeWebsites.length > 0) {
+      sections.push(`Each recipe MUST have a sourceWebsite field set to one of its audience's websites. Rotate through all sources — do not favor any single website.`);
+    }
+  }
+
+  // Complete dinner with healthy sides
+  sections.push(`COMPLETE DINNER REQUIREMENT:
+Each meal must be a COMPLETE dinner including a main dish and healthy sides.
+- Adult meals: include nutritionally balanced sides (vegetables, grains, salad) for a complete healthy dinner.
+- Kids meals: MUST include at least one healthy side (e.g., steamed vegetables, fruit slices, side salad). Include sides in the recipe name, ingredients, and instructions.`);
+
+  // Vegetarian days (only for weekly generation)
+  if (vegetarianDaysPerWeek && vegetarianDaysPerWeek > 0 && !targetAudience) {
+    sections.push(`VEGETARIAN DAYS:
+Include exactly ${vegetarianDaysPerWeek} vegetarian day(s) spread across the week. On vegetarian days, BOTH adult and kids meals must be fully vegetarian (no meat, poultry, or fish). Use protein-rich vegetarian ingredients like lentils, chickpeas, paneer, tofu, beans, or eggs.`);
   }
 
   if (aiContext.adultPreferences || aiContext.kidsPreferences || aiContext.generalNotes) {
@@ -54,12 +105,6 @@ ${getCuisineLabels(preferredCuisines)}`);
       contextLines.push(`- General notes: ${aiContext.generalNotes}`);
     }
     sections.push(contextLines.join('\n'));
-  }
-
-  if (recipeWebsites.length > 0) {
-    sections.push(`RECIPE SOURCES (MANDATORY - you MUST use recipes from ALL of these websites, distributing evenly across them):
-${recipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}
-Each recipe MUST have a sourceWebsite field set to one of the above websites. Rotate through all sources — do not favor any single website.`);
   }
 
   if (exclusions.length > 0) {
@@ -100,11 +145,13 @@ export async function searchRecipes(
   const settings = await getSettings();
   const contextPrompt = buildContextPrompt(
     settings.aiContext,
-    settings.preferredCuisines,
-    settings.recipeWebsites,
+    settings.adultCuisines,
+    settings.kidsCuisines,
+    settings.adultRecipeWebsites,
+    settings.kidsRecipeWebsites,
     settings.exclusions,
     targetAudience,
-    settings.notRecommended
+    settings.notRecommended,
   );
 
   const response = await anthropic.messages.create({
@@ -164,11 +211,13 @@ export async function generateMealSuggestion(
   const settings = await getSettings();
   const contextPrompt = buildContextPrompt(
     settings.aiContext,
-    settings.preferredCuisines,
-    settings.recipeWebsites,
+    settings.adultCuisines,
+    settings.kidsCuisines,
+    settings.adultRecipeWebsites,
+    settings.kidsRecipeWebsites,
     settings.exclusions,
     targetAudience,
-    settings.notRecommended
+    settings.notRecommended,
   );
 
   const excludeClause = excludeRecipeNames?.length
@@ -236,11 +285,13 @@ export async function generateDualMealSuggestion(
   const settings = await getSettings();
   const contextPrompt = buildContextPrompt(
     settings.aiContext,
-    settings.preferredCuisines,
-    settings.recipeWebsites,
+    settings.adultCuisines,
+    settings.kidsCuisines,
+    settings.adultRecipeWebsites,
+    settings.kidsRecipeWebsites,
     settings.exclusions,
     undefined,
-    settings.notRecommended
+    settings.notRecommended,
   );
 
   const excludeClause = excludeRecipeNames?.length
@@ -437,11 +488,14 @@ export async function generateWeeklyMeals(
   const settings = await getSettings();
   const contextPrompt = buildContextPrompt(
     settings.aiContext,
-    settings.preferredCuisines,
-    settings.recipeWebsites,
+    settings.adultCuisines,
+    settings.kidsCuisines,
+    settings.adultRecipeWebsites,
+    settings.kidsRecipeWebsites,
     settings.exclusions,
     undefined,
-    settings.notRecommended
+    settings.notRecommended,
+    settings.vegetarianDaysPerWeek,
   );
 
   const daysDescription = weekDates
@@ -467,11 +521,13 @@ For EACH day, generate:
 IMPORTANT GUIDELINES:
 - Ensure variety across the week (different proteins, cuisines, cooking methods)
 - Don't repeat the same main protein on consecutive days
-- Balance cuisines throughout the week
+- Use the ADULT cuisine preferences for adult meals and KIDS cuisine preferences for kids meals. Higher-priority cuisines should appear more often.
 - Always generate SEPARATE and DISTINCT recipes for adults and kids.
 - Keep prep times under 45 minutes for weeknight cooking
 - Use common ingredients available at most grocery stores
-- IMPORTANT: If recipe source websites are listed above, you MUST spread recipes across ALL of them. Every website must be used for at least one recipe. Set the sourceWebsite field for every recipe.
+- IMPORTANT: If recipe source websites are listed above, you MUST spread recipes across ALL of them per audience. Every listed website must be used for at least one recipe. Set the sourceWebsite field for every recipe.
+- If vegetarian days are specified above, those days must use ONLY vegetarian proteins (lentils, chickpeas, paneer, tofu, beans, eggs). Spread vegetarian days evenly across the week.
+- Every meal must include healthy sides — see the COMPLETE DINNER REQUIREMENT above.
 
 Return a JSON array with this structure:
 [
@@ -543,11 +599,13 @@ export async function generateSingleMeal(
   const settings = await getSettings();
   const contextPrompt = buildContextPrompt(
     settings.aiContext,
-    settings.preferredCuisines,
-    settings.recipeWebsites,
+    settings.adultCuisines,
+    settings.kidsCuisines,
+    settings.adultRecipeWebsites,
+    settings.kidsRecipeWebsites,
     settings.exclusions,
     targetAudience,
-    settings.notRecommended
+    settings.notRecommended,
   );
 
   const excludeClause = excludeRecipeNames.length

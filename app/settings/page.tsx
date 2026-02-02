@@ -8,12 +8,17 @@ const DEFAULT_EXCLUSIONS = ['beef', 'pork', 'shellfish'];
 const DEFAULT_SETTINGS: Settings = {
   exclusions: DEFAULT_EXCLUSIONS,
   preferredCuisines: ['indian-fusion', 'mediterranean'],
+  adultCuisines: ['indian-fusion', 'mediterranean'],
+  kidsCuisines: ['american'],
+  vegetarianDaysPerWeek: 1,
   aiContext: {
     adultPreferences: '',
     kidsPreferences: '',
     generalNotes: '',
   },
   recipeWebsites: [],
+  adultRecipeWebsites: [],
+  kidsRecipeWebsites: [],
   notRecommended: [],
 };
 
@@ -21,7 +26,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [notRecommended, setNotRecommended] = useState<NotRecommendedRecipe[]>([]);
   const [newExclusion, setNewExclusion] = useState('');
-  const [newWebsite, setNewWebsite] = useState('');
+  const [newAdultWebsite, setNewAdultWebsite] = useState('');
+  const [newKidsWebsite, setNewKidsWebsite] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -112,20 +118,91 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAddWebsite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWebsite.trim()) return;
+  // Cuisine handlers
+  const handleAddCuisine = async (list: 'adultCuisines' | 'kidsCuisines', cuisineId: CuisineId) => {
+    const currentList = settings[list];
+    if (currentList.includes(cuisineId)) return;
+    const newList = [...currentList, cuisineId];
 
     setSaving(true);
     try {
       const res = await fetch('/api/settings', {
-        method: 'POST',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeWebsite: newWebsite.trim() }),
+        body: JSON.stringify({ [list]: newList }),
       });
       const data = await res.json();
       setSettings(data);
-      setNewWebsite('');
+    } catch (error) {
+      console.error('Failed to update cuisines:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveCuisine = async (list: 'adultCuisines' | 'kidsCuisines', cuisineId: CuisineId) => {
+    const newList = settings[list].filter(c => c !== cuisineId);
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [list]: newList }),
+      });
+      const data = await res.json();
+      setSettings(data);
+    } catch (error) {
+      console.error('Failed to update cuisines:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMoveCuisine = async (
+    list: 'adultCuisines' | 'kidsCuisines',
+    index: number,
+    direction: 'up' | 'down'
+  ) => {
+    const arr = [...settings[list]];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= arr.length) return;
+
+    [arr[index], arr[targetIndex]] = [arr[targetIndex], arr[index]];
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [list]: arr }),
+      });
+      const data = await res.json();
+      setSettings(data);
+    } catch (error) {
+      console.error('Failed to reorder cuisines:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Website handlers
+  const handleAddWebsite = async (list: 'adultRecipeWebsites' | 'kidsRecipeWebsites', website: string) => {
+    const normalized = website.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!normalized) return;
+    const currentList = settings[list];
+    if (currentList.includes(normalized)) return;
+    const newList = [...currentList, normalized];
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [list]: newList }),
+      });
+      const data = await res.json();
+      setSettings(data);
     } catch (error) {
       console.error('Failed to add website:', error);
     } finally {
@@ -133,11 +210,15 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRemoveWebsite = async (website: string) => {
+  const handleRemoveWebsite = async (list: 'adultRecipeWebsites' | 'kidsRecipeWebsites', website: string) => {
+    const newList = settings[list].filter(w => w !== website);
+
     setSaving(true);
     try {
-      const res = await fetch(`/api/settings?recipeWebsite=${encodeURIComponent(website)}`, {
-        method: 'DELETE',
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [list]: newList }),
       });
       const data = await res.json();
       setSettings(data);
@@ -148,22 +229,19 @@ export default function SettingsPage() {
     }
   };
 
-  const handleCuisineToggle = async (cuisineId: CuisineId) => {
-    const newCuisines = settings.preferredCuisines.includes(cuisineId)
-      ? settings.preferredCuisines.filter((c) => c !== cuisineId)
-      : [...settings.preferredCuisines, cuisineId];
-
+  // Vegetarian days handler
+  const handleVegetarianDaysChange = async (count: number) => {
     setSaving(true);
     try {
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferredCuisines: newCuisines }),
+        body: JSON.stringify({ vegetarianDaysPerWeek: count }),
       });
       const data = await res.json();
       setSettings(data);
     } catch (error) {
-      console.error('Failed to update cuisines:', error);
+      console.error('Failed to update vegetarian days:', error);
     } finally {
       setSaving(false);
     }
@@ -223,6 +301,144 @@ export default function SettingsPage() {
     );
   }
 
+  const renderCuisineList = (listKey: 'adultCuisines' | 'kidsCuisines', title: string, emoji: string) => {
+    const currentList = settings[listKey];
+    const availableToAdd = AVAILABLE_CUISINES.filter(c => !currentList.includes(c.id));
+
+    return (
+      <div>
+        <h3 className="text-lg font-medium text-gray-800 mb-2">{emoji} {title}</h3>
+        <p className="text-gray-600 mb-3 text-sm">
+          #1 is highest priority. Use arrows to reorder.
+        </p>
+
+        {availableToAdd.length > 0 && (
+          <div className="mb-3">
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleAddCuisine(listKey, e.target.value as CuisineId);
+                  e.target.value = '';
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              defaultValue=""
+            >
+              <option value="" disabled>Add a cuisine...</option>
+              {availableToAdd.map(c => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {currentList.length > 0 ? (
+          <ol className="space-y-1.5">
+            {currentList.map((cuisineId, index) => {
+              const cuisine = AVAILABLE_CUISINES.find(c => c.id === cuisineId);
+              return (
+                <li key={cuisineId} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-bold text-emerald-600 w-5 text-center">{index + 1}</span>
+                  <span className="flex-1 text-sm text-gray-800">{cuisine?.label || cuisineId}</span>
+                  <div className="flex gap-0.5">
+                    <button
+                      onClick={() => handleMoveCuisine(listKey, index, 'up')}
+                      disabled={saving || index === 0}
+                      className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 disabled:opacity-30 text-sm"
+                      title="Move up"
+                    >
+                      &#9650;
+                    </button>
+                    <button
+                      onClick={() => handleMoveCuisine(listKey, index, 'down')}
+                      disabled={saving || index === currentList.length - 1}
+                      className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 disabled:opacity-30 text-sm"
+                      title="Move down"
+                    >
+                      &#9660;
+                    </button>
+                    <button
+                      onClick={() => handleRemoveCuisine(listKey, cuisineId)}
+                      disabled={saving}
+                      className="px-1.5 py-0.5 text-red-500 hover:text-red-700 disabled:opacity-30 text-sm font-bold"
+                      title="Remove"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <p className="text-gray-500 italic text-sm">No cuisines selected</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderWebsiteList = (
+    listKey: 'adultRecipeWebsites' | 'kidsRecipeWebsites',
+    title: string,
+    emoji: string,
+    newValue: string,
+    setNewValue: (v: string) => void,
+  ) => {
+    const currentList = settings[listKey];
+
+    return (
+      <div>
+        <h3 className="text-lg font-medium text-gray-800 mb-2">{emoji} {title}</h3>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newValue.trim()) {
+              handleAddWebsite(listKey, newValue.trim());
+              setNewValue('');
+            }
+          }}
+          className="flex gap-2 mb-3"
+        >
+          <input
+            type="text"
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            placeholder="e.g., seriouseats.com"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={saving || !newValue.trim()}
+            className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          >
+            Add
+          </button>
+        </form>
+
+        <div className="space-y-1.5">
+          {currentList.map((website) => (
+            <div
+              key={website}
+              className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg"
+            >
+              <span className="text-sm text-gray-800">{website}</span>
+              <button
+                onClick={() => handleRemoveWebsite(listKey, website)}
+                disabled={saving}
+                className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          {currentList.length === 0 && (
+            <p className="text-gray-500 italic text-sm">No websites added</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -278,30 +494,33 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Preferred Cuisines */}
+      {/* Cuisine Preferences - Split by audience */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">Preferred Cuisines</h2>
-        <p className="text-gray-600 mb-4 text-sm">
-          Select cuisines you want Claude to prioritize when suggesting meals.
-        </p>
-
-        <div className="grid grid-cols-2 gap-3">
-          {AVAILABLE_CUISINES.map((cuisine) => (
-            <label
-              key={cuisine.id}
-              className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={settings.preferredCuisines.includes(cuisine.id)}
-                onChange={() => handleCuisineToggle(cuisine.id)}
-                disabled={saving}
-                className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500"
-              />
-              <span className="text-gray-700">{cuisine.label}</span>
-            </label>
-          ))}
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Cuisine Preferences</h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          {renderCuisineList('adultCuisines', 'Adult Cuisines', '🧑')}
+          {renderCuisineList('kidsCuisines', 'Kids Cuisines', '👶')}
         </div>
+      </div>
+
+      {/* Vegetarian Days */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Vegetarian Days</h2>
+        <p className="text-gray-600 mb-4 text-sm">
+          How many days per week should have fully vegetarian meals (no meat, poultry, or fish) for both adults and kids.
+        </p>
+        <select
+          value={settings.vegetarianDaysPerWeek}
+          onChange={(e) => handleVegetarianDaysChange(Number(e.target.value))}
+          disabled={saving}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        >
+          {[0, 1, 2, 3, 4, 5].map(n => (
+            <option key={n} value={n}>
+              {n === 0 ? 'None' : `${n} day${n > 1 ? 's' : ''} per week`}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* AI Context */}
@@ -361,52 +580,15 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Recipe Websites */}
+      {/* Recipe Websites - Split by audience */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">Recipe Websites</h2>
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Recipe Websites</h2>
         <p className="text-gray-600 mb-4 text-sm">
-          Claude will reference these trusted recipe sites when generating suggestions.
+          Claude will reference these trusted recipe sites when generating suggestions. Separate sites for adult and kids meals.
         </p>
-
-        <form onSubmit={handleAddWebsite} className="flex gap-3 mb-4">
-          <input
-            type="text"
-            value={newWebsite}
-            onChange={(e) => setNewWebsite(e.target.value)}
-            placeholder="e.g., seriouseats.com"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <button
-            type="submit"
-            disabled={saving || !newWebsite.trim()}
-            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-          >
-            Add
-          </button>
-        </form>
-
-        <div className="space-y-2">
-          {settings.recipeWebsites.map((website) => (
-            <div
-              key={website}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-            >
-              <span className="text-gray-800">{website}</span>
-              <button
-                onClick={() => handleRemoveWebsite(website)}
-                disabled={saving}
-                className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-
-          {settings.recipeWebsites.length === 0 && (
-            <p className="text-gray-500 italic py-2 text-sm">
-              No websites added. Suggestions: seriouseats.com, budgetbytes.com, indianhealthyrecipes.com, skinnytaste.com
-            </p>
-          )}
+        <div className="space-y-6">
+          {renderWebsiteList('adultRecipeWebsites', 'Adult Recipe Sites', '🧑', newAdultWebsite, setNewAdultWebsite)}
+          {renderWebsiteList('kidsRecipeWebsites', 'Kids Recipe Sites', '👶', newKidsWebsite, setNewKidsWebsite)}
         </div>
       </div>
 
