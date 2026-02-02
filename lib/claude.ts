@@ -57,8 +57,9 @@ ${getCuisineLabels(preferredCuisines)}`);
   }
 
   if (recipeWebsites.length > 0) {
-    sections.push(`RECIPE SOURCES (prefer recipes from these websites):
-${recipeWebsites.join(', ')}`);
+    sections.push(`RECIPE SOURCES (MANDATORY - you MUST use recipes from ALL of these websites, distributing evenly across them):
+${recipeWebsites.map((w, i) => `${i + 1}. ${w}`).join('\n')}
+Each recipe MUST have a sourceWebsite field set to one of the above websites. Rotate through all sources — do not favor any single website.`);
   }
 
   if (exclusions.length > 0) {
@@ -123,7 +124,7 @@ Return 3 recipe suggestions as a JSON array. Each recipe should have:
 - servings: Number of servings (number)
 - kidFriendly: Boolean - true if mild flavors, no spicy ingredients, familiar foods
 - targetAudience: "adults", "kids", or "both"
-- sourceWebsite: If inspired by a specific website from the sources list, include it (optional)
+- sourceWebsite: The recipe source website (REQUIRED if recipe websites are configured in the context above, use one of the listed sites)
 - ingredients: Array of objects with:
   - name: Ingredient name
   - amount: Amount as string (e.g., "1", "0.5", "2")
@@ -203,7 +204,7 @@ Return a single recipe as JSON with:
 - servings: Number of servings (number)
 - kidFriendly: Boolean
 - targetAudience: "${targetAudience}"
-- sourceWebsite: If inspired by a specific website from the sources list (optional)
+- sourceWebsite: The recipe source website (REQUIRED if recipe websites are configured, use one of the listed sites)
 - ingredients: Array of objects with name, amount, unit, category
 - instructions: Array of step-by-step strings
 
@@ -274,7 +275,7 @@ Return a JSON object with this structure:
     "servings": 4,
     "kidFriendly": false,
     "targetAudience": "adults",
-    "sourceWebsite": "optional-website.com",
+    "sourceWebsite": "one-of-the-configured-websites.com",
     "ingredients": [{"name": "...", "amount": "1", "unit": "lb", "category": "protein"}],
     "instructions": ["Step 1", "Step 2"]
   },
@@ -285,7 +286,7 @@ Return a JSON object with this structure:
     "servings": 4,
     "kidFriendly": true,
     "targetAudience": "kids",
-    "sourceWebsite": "optional-website.com",
+    "sourceWebsite": "one-of-the-configured-websites.com",
     "ingredients": [{"name": "...", "amount": "1", "unit": "lb", "category": "protein"}],
     "instructions": ["Step 1", "Step 2"]
   }
@@ -470,6 +471,7 @@ IMPORTANT GUIDELINES:
 - Always generate SEPARATE and DISTINCT recipes for adults and kids.
 - Keep prep times under 45 minutes for weeknight cooking
 - Use common ingredients available at most grocery stores
+- IMPORTANT: If recipe source websites are listed above, you MUST spread recipes across ALL of them. Every website must be used for at least one recipe. Set the sourceWebsite field for every recipe.
 
 Return a JSON array with this structure:
 [
@@ -483,7 +485,7 @@ Return a JSON array with this structure:
       "servings": 4,
       "kidFriendly": false,
       "targetAudience": "adults",
-      "sourceWebsite": "optional-website.com",
+      "sourceWebsite": "one-of-the-configured-websites.com",
       "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
       "instructions": ["Step 1", "Step 2"]
     },
@@ -494,7 +496,7 @@ Return a JSON array with this structure:
       "servings": 4,
       "kidFriendly": true,
       "targetAudience": "kids",
-      "sourceWebsite": "optional-website.com",
+      "sourceWebsite": "one-of-the-configured-websites.com",
       "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
       "instructions": ["Step 1", "Step 2"]
     }
@@ -578,7 +580,7 @@ Return a single recipe as JSON:
   "servings": 4,
   "kidFriendly": ${targetAudience === 'kids' ? 'true' : 'false'},
   "targetAudience": "${targetAudience}",
-  "sourceWebsite": "optional-website.com",
+  "sourceWebsite": "one-of-the-configured-websites.com",
   "ingredients": [{"name": "ingredient", "amount": "1", "unit": "lb", "category": "protein"}],
   "instructions": ["Step 1", "Step 2"]
 }

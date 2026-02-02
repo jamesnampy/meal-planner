@@ -2,7 +2,8 @@ import { WeeklyPlan } from '@/types';
 
 /**
  * Determines if a plan is locked (past the approval deadline).
- * Lockdown = Sunday 6 PM PST = Monday 2 AM UTC (weekStart + 7 days, 02:00 UTC).
+ * Lockdown = Sunday 6 PM PST before the plan's Monday start.
+ * Sunday 6 PM PST = Monday 2 AM UTC = weekStart date at 02:00 UTC.
  * If the plan is already approved, it is not considered locked.
  */
 export function isPlanLocked(plan: WeeklyPlan): boolean {
@@ -16,13 +17,8 @@ export function isPlanLocked(plan: WeeklyPlan): boolean {
   }
 
   // weekStart is the Monday date string (YYYY-MM-DD)
-  const weekStartDate = new Date(plan.weekStart + 'T00:00:00Z');
-
-  // Lockdown = weekStart + 7 days at 02:00 UTC (= Sunday 6 PM PST / 7 PM PDT)
-  // Using a fixed UTC offset for simplicity (PST = UTC-8)
-  const lockdownUtc = new Date(weekStartDate);
-  lockdownUtc.setUTCDate(lockdownUtc.getUTCDate() + 7);
-  lockdownUtc.setUTCHours(2, 0, 0, 0);
+  // Lockdown = Sunday 6 PM PST = weekStart Monday at 02:00 UTC
+  const lockdownUtc = new Date(plan.weekStart + 'T02:00:00Z');
 
   return new Date() > lockdownUtc;
 }
